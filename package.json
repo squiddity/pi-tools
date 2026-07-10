@@ -1,0 +1,35 @@
+{
+  "name": "pi-tools",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local pi tools and reusable agent guidance.",
+  "type": "module",
+  "keywords": [
+    "pi-package",
+    "pi",
+    "agent-tools"
+  ],
+  "pi": {
+    "prompts": [
+      "./prompts"
+    ],
+    "skills": [
+      "./skills"
+    ],
+    "extensions": [
+      "./extensions"
+    ]
+  },
+  "scripts": {
+    "install:herdr-agents": "scripts/install-herdr-agents-include.sh",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3"
+  }
+}
