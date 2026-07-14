@@ -16,7 +16,7 @@ function parseJson(output: string, operation: string): Record<string, unknown> {
     if (!parsed || typeof parsed !== "object") throw new Error("not an object");
     return parsed as Record<string, unknown>;
   } catch {
-    throw new Error(`Herdr ${operation} returned malformed JSON: ${bounded(output) || "(empty)"}`);
+    throw new Error(`herdr ${operation} returned malformed JSON: ${bounded(output) || "(empty)"}`);
   }
 }
 
@@ -34,7 +34,7 @@ export function parseCreatedPane(output: string, placement: Placement): string {
   const paneId = placement === "tab"
     ? getString(parsed, "result", "root_pane", "pane_id")
     : getString(parsed, "result", "pane", "pane_id");
-  if (!paneId) throw new Error(`Herdr ${placement === "tab" ? "tab create" : "pane split"} response contained no pane id.`);
+  if (!paneId) throw new Error(`herdr ${placement === "tab" ? "tab create" : "pane split"} response contained no pane id.`);
   return paneId;
 }
 
@@ -73,7 +73,7 @@ async function run(args: string[]): Promise<string> {
   } catch (error: unknown) {
     const item = error as { stderr?: unknown; stdout?: unknown; message?: unknown };
     const detail = [item.message, item.stderr, item.stdout].filter(Boolean).map(bounded).join("\n");
-    throw new Error(`Herdr ${args.slice(0, 2).join(" ")} failed: ${detail || "unknown error"}`);
+    throw new Error(`herdr ${args.slice(0, 2).join(" ")} failed: ${detail || "unknown error"}`);
   }
 }
 
@@ -86,7 +86,7 @@ export function shellReadyDelayMs(): number {
 
 export async function ensureHerdrAvailable(): Promise<void> {
   if (process.platform === "win32") throw new Error("herdr_job_start is not supported on Windows.");
-  if (process.env.HERDR_ENV !== "1") throw new Error("herdr_job_start requires a Pi session running inside Herdr (HERDR_ENV=1).");
+  if (process.env.HERDR_ENV !== "1") throw new Error("herdr_job_start requires a Pi session running inside herdr (HERDR_ENV=1).");
   if (!process.env.HERDR_PANE_ID) throw new Error("HERDR_PANE_ID is not set; cannot identify the parent pane.");
   await run(["--version"]);
 }
@@ -95,7 +95,7 @@ export const herdr: HerdrOperations = {
   async createPane({ name, cwd, placement, ratio }) {
     if (placement === "tab") {
       const workspace = process.env.HERDR_WORKSPACE_ID;
-      if (!workspace) throw new Error("HERDR_WORKSPACE_ID is not set; cannot create a Herdr tab.");
+      if (!workspace) throw new Error("HERDR_WORKSPACE_ID is not set; cannot create a herdr tab.");
       const output = await run(["tab", "create", "--workspace", workspace, "--label", name, "--cwd", cwd, "--no-focus"]);
       return parseCreatedPane(output, placement);
     }

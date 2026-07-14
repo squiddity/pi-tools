@@ -16,7 +16,7 @@ import { watchJob } from "../../src/herdr-jobs/watcher.ts";
 const runtime = getRuntime();
 const START_SCHEMA = Type.Object({
   name: Type.String({ description: "Short display name for the job." }),
-  command: Type.String({ description: "Shell command to run in the Herdr pane." }),
+  command: Type.String({ description: "Shell command to run in the herdr pane." }),
   cwd: Type.Optional(Type.String({ description: "Working directory; relative paths use the current Pi cwd." })),
   kind: Type.Optional(StringEnum(["finite", "service"] as const)),
   placement: Type.Optional(StringEnum(["down", "right", "tab"] as const)),
@@ -49,7 +49,7 @@ function updateWidget(): void {
       const jobs = [...runtime.jobs.values()];
       const active = jobs.filter((job) => isActive(job.lifecycle)).length;
       const ready = jobs.filter((job) => job.lifecycle.readiness.kind === "ready").length;
-      const heading = `Herdr jobs · ${active} active${ready ? ` · ${ready} ready` : ""}`;
+      const heading = `herdr jobs · ${active} active${ready ? ` · ${ready} ready` : ""}`;
       return [
         truncateToWidth(theme.fg("accent", heading), width),
         ...jobs.map((job) => {
@@ -102,7 +102,7 @@ async function deliverEvent(job: RunningJob, event: WatchEvent): Promise<void> {
   const exitCode = event.kind === "result" ? event.result.exitCode : undefined;
   const failure = event.kind === "failure" ? event.error : undefined;
   const content = exitCode === undefined
-    ? await formatFailureMessage(job, failure ?? "Herdr job watcher failed.")
+    ? await formatFailureMessage(job, failure ?? "herdr job watcher failed.")
     : await formatResultMessage(job, exitCode);
   job.lifecycle.delivery = "delivered";
   await persistJob(job);
@@ -135,20 +135,20 @@ function startWatcher(job: RunningJob): void {
 function resolveJob(id?: string, name?: string): RunningJob {
   if (id) {
     const job = runtime.jobs.get(id);
-    if (!job) throw new Error(`No tracked Herdr job with id ${id}.`);
+    if (!job) throw new Error(`No tracked herdr job with id ${id}.`);
     return job;
   }
-  if (!name) throw new Error("Specify a Herdr job id or name.");
+  if (!name) throw new Error("Specify a herdr job id or name.");
   const matches = [...runtime.jobs.values()].filter((job) => job.metadata.name === name);
-  if (matches.length === 0) throw new Error(`No tracked Herdr job named ${name}.`);
-  if (matches.length > 1) throw new Error(`Herdr job name ${name} is ambiguous; use one of: ${matches.map((job) => job.metadata.id).join(", ")}.`);
+  if (matches.length === 0) throw new Error(`No tracked herdr job named ${name}.`);
+  if (matches.length > 1) throw new Error(`herdr job name ${name} is ambiguous; use one of: ${matches.map((job) => job.metadata.id).join(", ")}.`);
   return matches[0]!;
 }
 
 async function validatedCwd(input: string | undefined, ctx: ExtensionContext): Promise<string> {
   const cwd = input ? (isAbsolute(input) ? resolve(input) : resolve(ctx.cwd, input)) : ctx.cwd;
   const info = await stat(cwd);
-  if (!info.isDirectory()) throw new Error(`Herdr job cwd is not a directory: ${cwd}`);
+  if (!info.isDirectory()) throw new Error(`herdr job cwd is not a directory: ${cwd}`);
   return cwd;
 }
 
@@ -156,7 +156,7 @@ async function reattach(ctx: ExtensionContext): Promise<void> {
   if (!ctx.sessionManager.getSessionFile()) return;
   const root = getArtifactRoot(ctx.sessionManager.getSessionDir(), ctx.sessionManager.getSessionId());
   let saved: Awaited<ReturnType<typeof listMetadata>>;
-  try { saved = await listMetadata(root); } catch (error) { ctx.ui.notify(`Could not scan Herdr job artifacts: ${String(error)}`, "warning"); return; }
+  try { saved = await listMetadata(root); } catch (error) { ctx.ui.notify(`Could not scan herdr job artifacts: ${String(error)}`, "warning"); return; }
   for (const { metadata, paths } of saved) {
     if (metadata.delivery !== "pending" || metadata.parentSessionId !== ctx.sessionManager.getSessionId() || runtime.jobs.has(metadata.id)) continue;
     const job = createRunningJob(metadata, paths);
@@ -187,8 +187,8 @@ export default function herdrJobsExtension(pi: ExtensionAPI) {
 
   for (const type of ["herdr_job_ready", "herdr_job_result", "herdr_job_status"] as const) {
     pi.registerMessageRenderer(type, (message, options, theme) => {
-      const content = typeof message.content === "string" ? message.content : "Herdr job event";
-      const prefix = type === "herdr_job_result" ? "Herdr job" : type === "herdr_job_ready" ? "Herdr ready" : "Herdr status";
+      const content = typeof message.content === "string" ? message.content : "herdr job event";
+      const prefix = type === "herdr_job_result" ? "herdr job" : type === "herdr_job_ready" ? "herdr ready" : "herdr status";
       const details = options.expanded && message.details ? `\n${JSON.stringify(message.details, null, 2)}` : "";
       return new Text(`${theme.fg("accent", theme.bold(prefix))}\n${content}${details}`, 0, 0);
     });
@@ -196,16 +196,16 @@ export default function herdrJobsExtension(pi: ExtensionAPI) {
 
   pi.registerTool({
     name: "herdr_job_start",
-    label: "Start Herdr Job",
-    description: "Start an ordinary shell command in a dedicated Herdr pane and return immediately. This is fire-and-forget: readiness and completion are delivered automatically. Do not poll it with bash, herdr wait, sleeps, or repeated reads.",
-    promptSnippet: "Start a non-blocking Herdr job for a long-running test, build, server, or watcher; completion arrives automatically.",
-    promptGuidelines: ["Use herdr_job_start for ordinary long-running commands in Herdr. After calling herdr_job_start, do not poll with bash, herdr wait, sleeps, or repeated reads; wait for its automatic steer notification."],
+    label: "Start herdr job",
+    description: "Start an ordinary shell command in a dedicated herdr pane and return immediately. This is fire-and-forget: readiness and completion are delivered automatically. Do not poll it with bash, herdr wait, sleeps, or repeated reads.",
+    promptSnippet: "Start a non-blocking herdr job for a long-running test, build, server, or watcher; completion arrives automatically.",
+    promptGuidelines: ["Use herdr_job_start for ordinary long-running commands in herdr. After calling herdr_job_start, do not poll with bash, herdr wait, sleeps, or repeated reads; wait for its automatic steer notification."],
     parameters: START_SCHEMA,
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       const name = params.name.trim();
       const command = params.command.trim();
-      if (!name || name.length > 80) throw new Error("Herdr job name must contain 1–80 characters.");
-      if (!command) throw new Error("Herdr job command must not be empty.");
+      if (!name || name.length > 80) throw new Error("herdr job name must contain 1–80 characters.");
+      if (!command) throw new Error("herdr job command must not be empty.");
       if (params.readyTimeoutMs !== undefined && !params.readyPattern) throw new Error("readyTimeoutMs requires readyPattern.");
       if (params.readyPattern && params.readyRegex) {
         try { new RegExp(params.readyPattern); } catch (error) { throw new Error(`Invalid readiness regular expression: ${error instanceof Error ? error.message : String(error)}`); }
@@ -238,7 +238,7 @@ export default function herdrJobsExtension(pi: ExtensionAPI) {
         const job = createRunningJob(metadata, paths);
         runtime.jobs.set(id, job);
         startWatcher(job);
-        return textResult(`Herdr job "${name}" started in pane ${paneId}. Do not poll it; completion will be delivered automatically.`, { jobId: id, paneId, name, kind, cwd, artifactDir: paths.root, logFile: paths.logFile, status: "started" });
+        return textResult(`herdr job "${name}" started in pane ${paneId}. Do not poll it; completion will be delivered automatically.`, { jobId: id, paneId, name, kind, cwd, artifactDir: paths.root, logFile: paths.logFile, status: "started" });
       } catch (error) {
         if (paneId) { try { await herdr.closePane(paneId); } catch { /* best effort */ } }
         throw error;
@@ -247,8 +247,8 @@ export default function herdrJobsExtension(pi: ExtensionAPI) {
   });
 
   pi.registerTool({
-    name: "herdr_job_interrupt", label: "Interrupt Herdr Job",
-    description: "Send Ctrl+C to one tracked Herdr job. Tracking continues until the real exit result arrives.",
+    name: "herdr_job_interrupt", label: "Interrupt herdr job",
+    description: "Send Ctrl+C to one tracked herdr job. Tracking continues until the real exit result arrives.",
     parameters: Type.Object({ id: Type.Optional(Type.String()), name: Type.Optional(Type.String()) }),
     async execute(_id, params) {
       if ((params.id ? 1 : 0) + (params.name ? 1 : 0) !== 1) throw new Error("Specify exactly one of id or name.");
@@ -257,13 +257,13 @@ export default function herdrJobsExtension(pi: ExtensionAPI) {
       job.lifecycle = markInterruptRequested(job.lifecycle, Date.now());
       await persistJob(job);
       updateWidget();
-      return textResult(`Interrupt requested for Herdr job "${job.metadata.name}" (${job.metadata.id}).`, { jobId: job.metadata.id, status: "interrupt_requested" });
+      return textResult(`Interrupt requested for herdr job "${job.metadata.name}" (${job.metadata.id}).`, { jobId: job.metadata.id, status: "interrupt_requested" });
     },
   });
 
   pi.registerTool({
-    name: "herdr_job_read", label: "Read Herdr Job Log",
-    description: "Read a bounded tail of a tracked Herdr job's durable log. Use for explicit inspection, not polling.",
+    name: "herdr_job_read", label: "Read herdr job log",
+    description: "Read a bounded tail of a tracked herdr job's durable log. Use for explicit inspection, not polling.",
     parameters: Type.Object({ id: Type.String(), lines: Type.Optional(Type.Integer({ minimum: 1, maximum: 500 })) }),
     async execute(_id, params) {
       const job = resolveJob(params.id);
@@ -273,30 +273,30 @@ export default function herdrJobsExtension(pi: ExtensionAPI) {
   });
 
   pi.registerTool({
-    name: "herdr_jobs_list", label: "List Herdr Jobs",
-    description: "List currently tracked asynchronous Herdr jobs. This is for explicit inspection, not polling.",
+    name: "herdr_jobs_list", label: "List herdr jobs",
+    description: "List currently tracked asynchronous herdr jobs. This is for explicit inspection, not polling.",
     parameters: Type.Object({}),
     async execute() {
       const jobs = [...runtime.jobs.values()];
-      if (!jobs.length) return textResult("No tracked Herdr jobs.", { jobs: [] });
+      if (!jobs.length) return textResult("No tracked herdr jobs.", { jobs: [] });
       return textResult(jobs.map((job) => `${job.metadata.id}  ${jobSummary(job)}`).join("\n"), { jobs: jobs.map((job) => ({ id: job.metadata.id, name: job.metadata.name, paneId: job.metadata.paneId, kind: job.metadata.kind, state: projectLifecycle(job.lifecycle, Date.now()), readiness: job.lifecycle.readiness.kind, logFile: job.paths.logFile, artifactDir: job.paths.root })) });
     },
   });
 
   pi.registerTool({
-    name: "herdr_job_close", label: "Close Herdr Job Pane",
-    description: "Close a tracked Herdr job pane. Active jobs require force=true; prefer herdr_job_interrupt first.",
+    name: "herdr_job_close", label: "Close herdr job pane",
+    description: "Close a tracked herdr job pane. Active jobs require force=true; prefer herdr_job_interrupt first.",
     parameters: Type.Object({ id: Type.String(), force: Type.Optional(Type.Boolean()) }),
     async execute(_id, params) {
       const job = resolveJob(params.id);
-      if (isActive(job.lifecycle) && !params.force) throw new Error("The Herdr job is active. Interrupt it first, or pass force: true to close it intentionally.");
+      if (isActive(job.lifecycle) && !params.force) throw new Error("The herdr job is active. Interrupt it first, or pass force: true to close it intentionally.");
       job.lifecycle = markClosed(job.lifecycle, Date.now());
       await persistJob(job);
       job.abortController?.abort();
       await herdr.closePane(job.metadata.paneId);
       runtime.jobs.delete(job.metadata.id);
       updateWidget();
-      return textResult(`Closed Herdr job pane ${job.metadata.paneId}.`, { jobId: job.metadata.id, status: "closed" });
+      return textResult(`Closed herdr job pane ${job.metadata.paneId}.`, { jobId: job.metadata.id, status: "closed" });
     },
   });
 }

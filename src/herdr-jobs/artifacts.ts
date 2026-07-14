@@ -21,7 +21,7 @@ export function getArtifactRoot(sessionDir: string | undefined, sessionId: strin
 }
 
 export function getJobPaths(root: string, id: string): JobPaths {
-  if (!isJobId(id)) throw new Error("Invalid Herdr job id.");
+  if (!isJobId(id)) throw new Error("Invalid herdr job id.");
   const jobRoot = join(root, id);
   return {
     root: jobRoot,
@@ -139,7 +139,7 @@ export async function listMetadata(root: string): Promise<Array<{ metadata: Pers
 export async function assertInsideArtifactRoot(root: string, candidate: string): Promise<void> {
   const normalizedRoot = resolve(root) + sep;
   const normalizedCandidate = resolve(candidate);
-  if (!normalizedCandidate.startsWith(normalizedRoot)) throw new Error("Artifact path escapes the expected Herdr jobs root.");
+  if (!normalizedCandidate.startsWith(normalizedRoot)) throw new Error("Artifact path escapes the expected herdr jobs root.");
 }
 
 export function artifactDisplayName(paths: JobPaths): string {

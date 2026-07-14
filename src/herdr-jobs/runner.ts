@@ -18,7 +18,7 @@ export function runnerScript(options: { id: string; cwd: string; paths: JobPaths
   const { id, cwd, paths, startedAt } = options;
   const q = shellQuote;
   // The raw command is deliberately absent from this script. It is written to
-  // command.sh and invoked by path, keeping it out of Herdr's command argument.
+  // command.sh and invoked by path, keeping it out of herdr's command argument.
   return `#!/usr/bin/env bash
 set +e
 

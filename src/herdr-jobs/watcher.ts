@@ -9,7 +9,7 @@ const PANE_MISSING_GRACE_MS = 500;
 const REGEX_WINDOW_BYTES = 64 * 1024;
 
 export function abortableDelay(milliseconds: number, signal: AbortSignal): Promise<void> {
-  if (signal.aborted) return Promise.reject(new Error("Herdr job watcher aborted."));
+  if (signal.aborted) return Promise.reject(new Error("herdr job watcher aborted."));
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       signal.removeEventListener("abort", onAbort);
@@ -17,7 +17,7 @@ export function abortableDelay(milliseconds: number, signal: AbortSignal): Promi
     }, milliseconds);
     const onAbort = () => {
       clearTimeout(timer);
-      reject(new Error("Herdr job watcher aborted."));
+      reject(new Error("herdr job watcher aborted."));
     };
     signal.addEventListener("abort", onAbort, { once: true });
   });
@@ -109,7 +109,7 @@ export async function watchJob(
           return;
         }
         if (job.lifecycle.delivery !== "suppressed") {
-          const error = `Herdr pane ${job.metadata.paneId} disappeared before completion evidence was recorded.`;
+          const error = `herdr pane ${job.metadata.paneId} disappeared before completion evidence was recorded.`;
           job.lifecycle = markFailure(job.lifecycle, error, Date.now());
           await onEvent({ kind: "failure", error });
         }

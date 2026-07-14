@@ -25,21 +25,21 @@ export async function formatResultMessage(job: RunningJob, exitCode: number): Pr
   const succeeded = exitCode === 0;
   const tail = await readLogTail(job.paths.logFile, 80);
   const heading = succeeded
-    ? `Herdr job "${job.metadata.name}" completed successfully in ${elapsed}.`
-    : `Herdr job "${job.metadata.name}" failed after ${elapsed}.`;
+    ? `herdr job "${job.metadata.name}" completed successfully in ${elapsed}.`
+    : `herdr job "${job.metadata.name}" failed after ${elapsed}.`;
   return `${heading}\nExit code: ${exitCode}\nPane: ${job.metadata.paneId}\nLog: ${job.paths.logFile}\n\nLast output:\n${tail.content}${tail.notice ? `\n\n${tail.notice}` : ""}`;
 }
 
 export async function formatFailureMessage(job: RunningJob, error: string): Promise<string> {
   const tail = await readLogTail(job.paths.logFile, 80);
-  return `Herdr job "${job.metadata.name}" watcher failed after ${formatElapsed(job.metadata.startedAt)}.\nReason: ${error}\nPane: ${job.metadata.paneId}\nLog: ${job.paths.logFile}\n\nLast output:\n${tail.content}${tail.notice ? `\n\n${tail.notice}` : ""}`;
+  return `herdr job "${job.metadata.name}" watcher failed after ${formatElapsed(job.metadata.startedAt)}.\nReason: ${error}\nPane: ${job.metadata.paneId}\nLog: ${job.paths.logFile}\n\nLast output:\n${tail.content}${tail.notice ? `\n\n${tail.notice}` : ""}`;
 }
 
 export function formatReadyMessage(job: RunningJob, matchedText?: string): string {
   const kind = job.metadata.kind === "service" ? "service" : "job";
-  return `Herdr ${kind} "${job.metadata.name}" is ready after ${formatElapsed(job.metadata.startedAt)}.\nPane: ${job.metadata.paneId}${matchedText ? `\nMatched: ${matchedText}` : ""}\nLog: ${job.paths.logFile}`;
+  return `herdr ${kind} "${job.metadata.name}" is ready after ${formatElapsed(job.metadata.startedAt)}.\nPane: ${job.metadata.paneId}${matchedText ? `\nMatched: ${matchedText}` : ""}\nLog: ${job.paths.logFile}`;
 }
 
 export function formatReadyTimeoutMessage(job: RunningJob): string {
-  return `Herdr job "${job.metadata.name}" did not report readiness before its timeout. The process is still running.\nPane: ${job.metadata.paneId}\nLog: ${job.paths.logFile}`;
+  return `herdr job "${job.metadata.name}" did not report readiness before its timeout. The process is still running.\nPane: ${job.metadata.paneId}\nLog: ${job.paths.logFile}`;
 }
