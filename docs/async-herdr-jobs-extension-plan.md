@@ -57,7 +57,7 @@ These decisions should remain fixed unless implementation evidence demonstrates 
 4. **The durable log is readiness authority.** Readiness matching scans `output.log`, not Herdr scrollback, so noisy output cannot erase the event before it is observed.
 5. **Do not call `herdr wait` from the start tool.** An asynchronously spawned `herdr wait` child could avoid blocking Pi, but it adds a second long-lived process per condition and still depends on bounded terminal output. Sidecar/log observation is simpler and more reliable for jobs launched by this extension.
 6. **Do not implement the raw Herdr socket protocol in v1.** Herdr event subscriptions are useful for a future high-volume supervisor, but the CLI plus durable local artifacts is adequate for the expected small number of concurrent jobs.
-7. **Keep panes by default.** Visibility and post-mortem inspection are primary reasons to use Herdr. Closing a pane is opt-in or explicit.
+7. **Close successful job tabs by default; retain failures.** Durable logs/results preserve successful output without accumulating tabs, while a failed job remains visible for post-mortem inspection. The calling agent may override this per task.
 8. **The widget is not Pi's working state.** Background status belongs in a custom widget; it must not keep the built-in spinner/message active.
 9. **Coding agents remain separate.** Do not route agent sessions through this generic runner; continue using `pi-herdr-subagents` for agent lifecycle and summaries.
 
@@ -122,7 +122,7 @@ Proposed parameters:
   readyPattern?: string;
   readyRegex?: boolean;                // default: false
   readyTimeoutMs?: number;             // optional; timeout does not kill service
-  keepPane?: boolean;                  // default: true
+  cleanup?: "on_success" | "always" | "never"; // default: on_success
 }
 ```
 
@@ -136,7 +136,7 @@ Validation and semantics:
 - `readyPattern` is allowed for either kind, though it is primarily intended for services.
 - Compile a readiness regex before launch so invalid patterns fail synchronously without creating a pane.
 - If `readyTimeoutMs` expires, emit a readiness-timeout notification but do not automatically kill the underlying process.
-- `keepPane: true` leaves the pane open after completion for inspection. If false, close it only after result/log extraction succeeds.
+- `cleanup: "on_success"` closes a tab after successful completion and retains a failed tab for inspection. `"always"` closes either outcome after result/log extraction; `"never"` leaves either outcome open. Keep `keepPane` as a backwards-compatible alias (`true` → `"never"`, `false` → `"always"`) until a later major API revision; reject calls that specify both fields.
 - Return details containing at least `jobId`, `paneId`, `name`, `kind`, `cwd`, `artifactDir`, `logFile`, and `status: "started"`.
 - The tool description and prompt guidelines must explicitly say that it is fire-and-forget, completion will arrive automatically, and the model must not poll with `bash`, `herdr wait`, sleeps, or repeated reads.
 
@@ -222,6 +222,7 @@ Rules:
 
 - If the process appears active and `force` is not true, refuse and instruct the caller to interrupt first.
 - If forced, close the pane and mark the job as intentionally closed/suppressed so pane disappearance does not produce a misleading failure notification.
+- Retain completed jobs whose cleanup policy leaves their tab open in the in-memory registry (but not the active widget), so the calling agent can invoke `herdr_job_close` after reading the terminal result.
 - Abort the watcher only after recording the suppression state.
 
 ## Proposed file layout
@@ -371,7 +372,7 @@ interface PersistedJobMetadata {
   readyPattern?: string;
   readyRegex: boolean;
   readyTimeoutMs?: number;
-  keepPane: boolean;
+  cleanup: "on_success" | "always" | "never";
   delivery: "pending" | "delivered" | "suppressed";
   state: string;
 }
@@ -562,7 +563,7 @@ Projection rules for display:
 
 For service jobs, `ready` is still an active/open job. Do not remove it from tracking until it exits or is explicitly closed.
 
-For finite jobs, remove the row after terminal notification delivery. The completion message remains in the transcript.
+For finite jobs, remove the row after terminal notification delivery. If their cleanup policy retains the tab, retain a non-widget registry record for `herdr_job_close` and explicit inspection; otherwise remove the record after closing the pane. The completion message remains in the transcript.
 
 ### 7. Async notifications
 
@@ -805,7 +806,7 @@ herdr_job_start({
   name: "integration",
   command: "npm run test:integration",
   kind: "finite",
-  keepPane: true
+  cleanup: "never"
 })
 ```
 

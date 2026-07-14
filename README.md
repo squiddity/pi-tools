@@ -15,7 +15,7 @@ Local repo for pi/agent tooling and reusable agent guidance.
 
 [`extensions/herdr-jobs/`](extensions/herdr-jobs/) provides non-blocking `herdr_job_*` tools for ordinary shell commands in Herdr. `herdr_job_start` creates a visible pane and durable artifacts, returns immediately, and sends automatic readiness/completion notifications; use it for long-running tests, builds, servers, and watchers. Use `subagent` for coding-agent sessions instead.
 
-Run the package in Pi from this repository:
+Try the complete package for one Pi invocation:
 
 ```bash
 pi -e .
@@ -23,7 +23,23 @@ pi -e .
 
 After `herdr_job_start`, do not poll with `herdr wait`, sleeps, loops, or repeated reads. Completion arrives as a steer message. See [`docs/herdr-panes.md`](docs/herdr-panes.md) for examples and fallback CLI use.
 
-## Install into Pi agent instructions
+## Install into Pi
+
+Install the complete `pi-tools` package globally:
+
+```bash
+pi install /home/squiddity/projects/pi-tools
+```
+
+Or install only the Herdr jobs extension entrypoint, without other package resources:
+
+```bash
+pi install /home/squiddity/projects/pi-tools/extensions/herdr-jobs/index.ts
+```
+
+Add `-l` to either command for project-local installation. Restart Pi (or run `/reload`) after installation or after changing a locally linked extension.
+
+## Install agent guidance
 
 Install/update a managed block in the global Pi agent instructions:
 
