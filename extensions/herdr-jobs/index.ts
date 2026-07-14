@@ -2,7 +2,7 @@ import { stat } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { StringEnum } from "@earendil-works/pi-ai";
-import { Text, truncateToWidth } from "@earendil-works/pi-tui";
+import { Box, Text, truncateToWidth } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import { createJobId, ensureJobDirectory, getArtifactRoot, getJobPaths, listMetadata, readLogTail, readResult, writeAtomicJson } from "../../src/herdr-jobs/artifacts.ts";
 import { formatFailureMessage, formatReadyMessage, formatReadyTimeoutMessage, formatResultMessage, jobSummary } from "../../src/herdr-jobs/format.ts";
@@ -188,9 +188,26 @@ export default function herdrJobsExtension(pi: ExtensionAPI) {
   for (const type of ["herdr_job_ready", "herdr_job_result", "herdr_job_status"] as const) {
     pi.registerMessageRenderer(type, (message, options, theme) => {
       const content = typeof message.content === "string" ? message.content : "herdr job event";
+      const details = message.details as { exitCode?: unknown } | undefined;
+      const exitCode = typeof details?.exitCode === "number" ? details.exitCode : undefined;
+      const color = type === "herdr_job_result"
+        ? exitCode === 0 ? "success" : "error"
+        : type === "herdr_job_ready" ? "success" : "warning";
+      const background = type === "herdr_job_result"
+        ? exitCode === 0 ? "toolSuccessBg" : "toolErrorBg"
+        : "customMessageBg";
       const prefix = type === "herdr_job_result" ? "herdr job" : type === "herdr_job_ready" ? "herdr ready" : "herdr status";
-      const details = options.expanded && message.details ? `\n${JSON.stringify(message.details, null, 2)}` : "";
-      return new Text(`${theme.fg("accent", theme.bold(prefix))}\n${content}${details}`, 0, 0);
+      const outputMarker = "\n\nLast output:\n";
+      const outputIndex = content.indexOf(outputMarker);
+      const body = !options.expanded && outputIndex >= 0
+        ? `${content.slice(0, outputIndex)}\n${theme.fg("dim", "Ctrl+O to show last output")}`
+        : content;
+      const expandedDetails = options.expanded && message.details
+        ? `\n${theme.fg("dim", JSON.stringify(message.details, null, 2))}`
+        : "";
+      const box = new Box(1, 1, (text) => theme.bg(background, text));
+      box.addChild(new Text(`${theme.fg(color, theme.bold(`[${prefix}]`))}\n${theme.fg("customMessageText", body)}${expandedDetails}`, 0, 0));
+      return box;
     });
   }
 
