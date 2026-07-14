@@ -66,7 +66,7 @@ These decisions should remain fixed unless implementation evidence demonstrates 
 ### In scope
 
 - Start a finite command or long-running service in a new Herdr pane.
-- Default to a lower split of the current Pi pane, with no focus stealing.
+- Default to a new tab in the current Herdr workspace, with no focus stealing; callers may explicitly request a lower or right split.
 - Return from the Pi tool as soon as the command has been launched.
 - Preserve live terminal visibility in the Herdr pane.
 - Persist complete merged stdout/stderr to a log file.
@@ -117,7 +117,7 @@ Proposed parameters:
   command: string;
   cwd?: string;
   kind?: "finite" | "service";       // default: finite
-  placement?: "down" | "right" | "tab"; // default: down
+  placement?: "down" | "right" | "tab"; // default: tab
   ratio?: number;                      // split only; default: 0.30
   readyPattern?: string;
   readyRegex?: boolean;                // default: false

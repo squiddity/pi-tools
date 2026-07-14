@@ -19,8 +19,8 @@ Important variables:
 
 ## Opinionated Herdr defaults for agents
 
-- Put long-running jobs in a lower pane: split `--direction down` so the primary agent pane remains above the job output.
-- Use a lower pane by default rather than a right-side pane. Vertical stacking keeps command output readable at normal terminal widths and leaves the primary reasoning pane in the expected top position.
+- Prefer a new tab for a long-running job. It keeps the primary agent pane uncluttered while preserving a full-sized, visible terminal for the job.
+- Use a lower or right-side split only when watching the job alongside the primary agent is more valuable than a full-sized terminal.
 - Use `--no-focus` when opening a job pane from an agent so the agent does not accidentally type into the new shell.
 - Use `--cwd "$PWD"` so the pane starts in the same project directory as the agent.
 - Rename panes immediately (`server`, `tests`, `logs`, `watch`) so the Herdr sidebar stays useful.
@@ -31,7 +31,7 @@ Important variables:
 
 ## Async jobs from Pi
 
-When the `herdr-jobs` Pi extension is loaded, use its `herdr_job_start` tool for ordinary long-running commands. It creates the visible pane, persists a durable merged log and result sidecar, returns control to Pi immediately, and delivers one readiness/completion steer message automatically.
+When the `herdr-jobs` Pi extension is loaded, use its `herdr_job_start` tool for ordinary long-running commands. It creates a new tab by default (or an explicitly requested split), persists a durable merged log and result sidecar, returns control to Pi immediately, and delivers one readiness/completion steer message automatically.
 
 ```ts
 herdr_job_start({
@@ -52,34 +52,33 @@ After starting an async job, do **not** poll it with `bash`, `herdr wait`, sleep
 
 The direct CLI workflow below remains appropriate when the extension is unavailable or when a genuinely short synchronous gate is required.
 
-## Open a pane for a long-running command
+## Open a tab for a long-running command
 
-Prefer splitting the current pane explicitly by id. For jobs started by an agent, default to a lower pane:
+Prefer a new tab for an agent-started long-running command:
 
 ```bash
-new_pane=$(herdr pane split "$HERDR_PANE_ID" \
-  --direction down \
-  --ratio 0.30 \
+new_pane=$(herdr tab create \
+  --workspace "$HERDR_WORKSPACE_ID" \
+  --label "server" \
   --cwd "$PWD" \
-  --no-focus | node -e 'let s="";process.stdin.on("data",d=>s+=d);process.stdin.on("end",()=>{const j=JSON.parse(s); console.log(j.result.pane.pane_id)})')
+  --no-focus | node -e 'let s="";process.stdin.on("data",d=>s+=d);process.stdin.on("end",()=>{const j=JSON.parse(s); console.log(j.result.root_pane.pane_id)})')
 
-herdr pane rename "$new_pane" "server"
 herdr pane run "$new_pane" "npm run dev"
 ```
 
 Notes:
 
-- `--direction down` creates a lower pane beneath the current pane; this is the default placement for long-running jobs.
-- Use `right` only when side-by-side comparison is more important than output width.
-- `--ratio 0.30` gives the new pane about 30% of the split area.
-- `--cwd "$PWD"` starts the pane in the current project directory.
+- A tab gives the job a full-sized terminal and leaves the primary agent view uncluttered.
+- `--workspace "$HERDR_WORKSPACE_ID"` creates the tab in the current workspace explicitly.
+- `--label "server"` keeps the Herdr sidebar useful.
+- Use `--cwd "$PWD"` so the tab starts in the same project directory as the agent.
 - `--no-focus` avoids stealing interactive focus from the main agent pane.
 - `herdr pane run` sends the command plus Enter atomically; prefer it over `send-text` + `send-keys enter` for shell commands.
 
-If `jq` is available, the pane id extraction can be shorter:
+Use a split only when you need to watch the job beside the primary agent:
 
 ```bash
-new_pane=$(herdr pane split "$HERDR_PANE_ID" --direction down --cwd "$PWD" --no-focus | jq -r '.result.pane.pane_id')
+new_pane=$(herdr pane split "$HERDR_PANE_ID" --direction down --ratio 0.30 --cwd "$PWD" --no-focus | jq -r '.result.pane.pane_id')
 ```
 
 ## Monitor the pane

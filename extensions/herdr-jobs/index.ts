@@ -213,7 +213,7 @@ export default function herdrJobsExtension(pi: ExtensionAPI) {
       await ensureHerdrAvailable();
       const cwd = await validatedCwd(params.cwd, ctx);
       const kind: JobKind = params.kind ?? "finite";
-      const placement: Placement = params.placement ?? "down";
+      const placement: Placement = params.placement ?? "tab";
       const ratio = params.ratio ?? 0.3;
       const startedAt = Date.now();
       const id = createJobId();

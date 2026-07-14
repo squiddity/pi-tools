@@ -9,7 +9,7 @@ High-level rules:
 - Use `subagent` for coding-agent sessions and `herdr_job_start` for ordinary shell commands. If the async job extension is unavailable, direct pane commands and a genuinely short synchronous `herdr wait` remain valid fallbacks.
 - Treat Herdr panes as real terminals owned by the Herdr server; they persist if the UI detaches.
 - Do not block the primary agent pane with long-running servers, watchers, or slow test loops when a Herdr side pane would be clearer.
-- For long-running jobs, open a lower pane with `herdr pane split "$HERDR_PANE_ID" --direction down ...` so the main agent stays above and the observable job runs below.
+- Prefer a new Herdr tab for long-running jobs so the primary agent pane stays uncluttered. Use a split only when simultaneous side-by-side or stacked visibility is specifically useful.
 - Rename every Herdr-created job pane with a short purpose label such as `server`, `tests`, `logs`, or `watch`.
 - Use pane commands for ordinary shells, servers, tests, logs, and scripts. Use `herdr agent start` only when intentionally starting another coding agent.
 - Prefer explicit pane IDs from `$HERDR_PANE_ID` or command output over relying on whichever pane is focused in the UI.
