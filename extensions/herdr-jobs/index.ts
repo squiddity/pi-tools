@@ -2,10 +2,10 @@ import { stat } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { StringEnum } from "@earendil-works/pi-ai";
-import { Box, Text, truncateToWidth } from "@earendil-works/pi-tui";
+import { Box, Text, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import { createJobId, ensureJobDirectory, getArtifactRoot, getJobPaths, listMetadata, readLogTail, readResult, writeAtomicJson } from "../../src/herdr-jobs/artifacts.ts";
-import { formatFailureMessage, formatReadyMessage, formatReadyTimeoutMessage, formatResultMessage, jobSummary } from "../../src/herdr-jobs/format.ts";
+import { formatElapsed, formatFailureMessage, formatReadyMessage, formatReadyTimeoutMessage, formatResultMessage, jobSummary } from "../../src/herdr-jobs/format.ts";
 import { ensureHerdrAvailable, herdr, shellReadyDelayMs } from "../../src/herdr-jobs/herdr.ts";
 import { isActive, markClosed, markInterruptRequested, markResult, projectLifecycle } from "../../src/herdr-jobs/lifecycle.ts";
 import { createRunningJob, getRuntime, hasSessionDelivery, persistJob, clearWidgetTimer } from "../../src/herdr-jobs/runtime.ts";
@@ -35,6 +35,32 @@ function sleep(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
+function panelTop(title: string, info: string, width: number, border: (text: string) => string): string {
+  if (width <= 0) return "";
+  if (width === 1) return border("╭");
+  const inner = width - 2;
+  const titlePart = `─ ${title} `;
+  const infoPart = ` ${info} ─`;
+  const fill = "─".repeat(Math.max(0, inner - titlePart.length - infoPart.length));
+  return border(`╭${`${titlePart}${fill}${infoPart}`.slice(0, inner).padEnd(inner, "─")}╮`);
+}
+
+function panelLine(left: string, right: string, width: number, border: (text: string) => string): string {
+  if (width <= 0) return "";
+  if (width === 1) return border("│");
+  const inner = width - 2;
+  const rightWidth = visibleWidth(right);
+  if (rightWidth >= inner) return `${border("│")}${truncateToWidth(right, inner)}${border("│")}`;
+  const truncatedLeft = truncateToWidth(left, Math.max(0, inner - rightWidth));
+  const padding = " ".repeat(Math.max(0, inner - visibleWidth(truncatedLeft) - rightWidth));
+  return `${border("│")}${truncatedLeft}${padding}${right}${border("│")}`;
+}
+
+function panelBottom(width: number, border: (text: string) => string): string {
+  if (width <= 0) return "";
+  return border(width === 1 ? "╰" : `╰${"─".repeat(width - 2)}╯`);
+}
+
 function updateWidget(): void {
   const ctx = runtime.latestCtx;
   if (!ctx?.hasUI) return;
@@ -46,18 +72,22 @@ function updateWidget(): void {
   ctx.ui.setWidget("herdr-jobs", (_tui, theme) => ({
     invalidate() {},
     render(width: number) {
+      const now = Date.now();
       const jobs = [...runtime.jobs.values()];
       const active = jobs.filter((job) => isActive(job.lifecycle)).length;
       const ready = jobs.filter((job) => job.lifecycle.readiness.kind === "ready").length;
-      const heading = `herdr jobs · ${active} active${ready ? ` · ${ready} ready` : ""}`;
-      return [
-        truncateToWidth(theme.fg("accent", heading), width),
-        ...jobs.map((job) => {
-          const projection = projectLifecycle(job.lifecycle, Date.now());
-          const color = projection === "failed" ? "error" : projection === "ready" || projection === "completed" ? "success" : projection === "stalled" ? "warning" : "muted";
-          return truncateToWidth(theme.fg(color, jobSummary(job)), width);
-        }),
-      ];
+      const info = `${active} active${ready ? ` · ${ready} ready` : ""}`;
+      const border = (text: string) => theme.fg("accent", text);
+      const lines = [panelTop("herdr jobs", info, width, border)];
+      for (const job of jobs) {
+        const projection = projectLifecycle(job.lifecycle, now);
+        const color = projection === "failed" ? "error" : projection === "ready" || projection === "completed" ? "success" : projection === "stalled" ? "warning" : "muted";
+        const left = ` ${formatElapsed(job.metadata.startedAt, now)}  ${job.metadata.name} `;
+        const right = ` ${theme.fg(color, `${projection} · ${job.metadata.paneId}`)} `;
+        lines.push(panelLine(left, right, width, border));
+      }
+      lines.push(panelBottom(width, border));
+      return lines;
     },
   }), { placement: "aboveEditor" });
 }
@@ -196,7 +226,9 @@ export default function herdrJobsExtension(pi: ExtensionAPI) {
       const background = type === "herdr_job_result"
         ? exitCode === 0 ? "toolSuccessBg" : "toolErrorBg"
         : "customMessageBg";
-      const prefix = type === "herdr_job_result" ? "herdr job" : type === "herdr_job_ready" ? "herdr ready" : "herdr status";
+      const prefix = type === "herdr_job_result"
+        ? exitCode === 0 ? "herdr job complete" : "herdr job failed"
+        : type === "herdr_job_ready" ? "herdr job ready" : "herdr job status";
       const outputMarker = "\n\nLast output:\n";
       const outputIndex = content.indexOf(outputMarker);
       const body = !options.expanded && outputIndex >= 0
@@ -213,11 +245,14 @@ export default function herdrJobsExtension(pi: ExtensionAPI) {
 
   pi.registerTool({
     name: "herdr_job_start",
-    label: "Start herdr job",
+    label: "herdr job start",
     description: "Start an ordinary shell command in a dedicated herdr pane and return immediately. This is fire-and-forget: readiness and completion are delivered automatically. Do not poll it with bash, herdr wait, sleeps, or repeated reads.",
     promptSnippet: "Start a non-blocking herdr job for a long-running test, build, server, or watcher; completion arrives automatically.",
     promptGuidelines: ["Use herdr_job_start for ordinary long-running commands in herdr. After calling herdr_job_start, do not poll with bash, herdr wait, sleeps, or repeated reads; wait for its automatic steer notification."],
     parameters: START_SCHEMA,
+    renderCall(_args, theme) {
+      return new Text(theme.fg("toolTitle", theme.bold("herdr job start")), 0, 0);
+    },
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       const name = params.name.trim();
       const command = params.command.trim();
@@ -264,9 +299,12 @@ export default function herdrJobsExtension(pi: ExtensionAPI) {
   });
 
   pi.registerTool({
-    name: "herdr_job_interrupt", label: "Interrupt herdr job",
+    name: "herdr_job_interrupt", label: "herdr job interrupt",
     description: "Send Ctrl+C to one tracked herdr job. Tracking continues until the real exit result arrives.",
     parameters: Type.Object({ id: Type.Optional(Type.String()), name: Type.Optional(Type.String()) }),
+    renderCall(_args, theme) {
+      return new Text(theme.fg("toolTitle", theme.bold("herdr job interrupt")), 0, 0);
+    },
     async execute(_id, params) {
       if ((params.id ? 1 : 0) + (params.name ? 1 : 0) !== 1) throw new Error("Specify exactly one of id or name.");
       const job = resolveJob(params.id, params.name);
@@ -279,9 +317,12 @@ export default function herdrJobsExtension(pi: ExtensionAPI) {
   });
 
   pi.registerTool({
-    name: "herdr_job_read", label: "Read herdr job log",
+    name: "herdr_job_read", label: "herdr job read",
     description: "Read a bounded tail of a tracked herdr job's durable log. Use for explicit inspection, not polling.",
     parameters: Type.Object({ id: Type.String(), lines: Type.Optional(Type.Integer({ minimum: 1, maximum: 500 })) }),
+    renderCall(_args, theme) {
+      return new Text(theme.fg("toolTitle", theme.bold("herdr job read")), 0, 0);
+    },
     async execute(_id, params) {
       const job = resolveJob(params.id);
       const tail = await readLogTail(job.paths.logFile, params.lines ?? 80);
@@ -290,9 +331,12 @@ export default function herdrJobsExtension(pi: ExtensionAPI) {
   });
 
   pi.registerTool({
-    name: "herdr_jobs_list", label: "List herdr jobs",
+    name: "herdr_jobs_list", label: "herdr jobs list",
     description: "List currently tracked asynchronous herdr jobs. This is for explicit inspection, not polling.",
     parameters: Type.Object({}),
+    renderCall(_args, theme) {
+      return new Text(theme.fg("toolTitle", theme.bold("herdr jobs list")), 0, 0);
+    },
     async execute() {
       const jobs = [...runtime.jobs.values()];
       if (!jobs.length) return textResult("No tracked herdr jobs.", { jobs: [] });
@@ -301,9 +345,12 @@ export default function herdrJobsExtension(pi: ExtensionAPI) {
   });
 
   pi.registerTool({
-    name: "herdr_job_close", label: "Close herdr job pane",
+    name: "herdr_job_close", label: "herdr job close",
     description: "Close a tracked herdr job pane. Active jobs require force=true; prefer herdr_job_interrupt first.",
     parameters: Type.Object({ id: Type.String(), force: Type.Optional(Type.Boolean()) }),
+    renderCall(_args, theme) {
+      return new Text(theme.fg("toolTitle", theme.bold("herdr job close")), 0, 0);
+    },
     async execute(_id, params) {
       const job = resolveJob(params.id);
       if (isActive(job.lifecycle) && !params.force) throw new Error("The herdr job is active. Interrupt it first, or pass force: true to close it intentionally.");

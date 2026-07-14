@@ -5,9 +5,10 @@ import herdrJobsExtension from "../../extensions/herdr-jobs/index.ts";
 
 test("result messages use a coloured box and hide log output until expanded", () => {
   const renderers = new Map<string, any>();
+  const tools = new Map<string, any>();
   const pi = {
     on() {},
-    registerTool() {},
+    registerTool(tool: { name: string }) { tools.set(tool.name, tool); },
     registerMessageRenderer(type: string, renderer: unknown) { renderers.set(type, renderer); },
   } as unknown as ExtensionAPI;
   herdrJobsExtension(pi);
@@ -26,9 +27,14 @@ test("result messages use a coloured box and hide log output until expanded", ()
 
   const collapsed = renderer(message, { expanded: false }, theme).render(160).join("\n");
   assert.match(collapsed, /toolSuccessBg/);
+  assert.match(collapsed, /\[herdr job complete\]/);
   assert.match(collapsed, /to show last output/);
   assert.doesNotMatch(collapsed, /very noisy log line/);
 
   const expanded = renderer(message, { expanded: true }, theme).render(160).join("\n");
   assert.match(expanded, /very noisy log line/);
+
+  const startCall = tools.get("herdr_job_start").renderCall({}, theme).render(160).join("\n");
+  assert.match(startCall, /herdr job start/);
+  assert.doesNotMatch(startCall, /herdr_job_start/);
 });
