@@ -11,6 +11,18 @@ Local repo for pi/agent tooling and reusable agent guidance.
 - [`agent-includes/herdr.md`](agent-includes/herdr.md) — short high-level guidance for `AGENTS.md`.
 - [`docs/herdr-panes.md`](docs/herdr-panes.md) — deeper guide to opening, monitoring, and closing Herdr panes for long-running jobs.
 
+## Herdr jobs extension
+
+[`extensions/herdr-jobs/`](extensions/herdr-jobs/) provides non-blocking `herdr_job_*` tools for ordinary shell commands in Herdr. `herdr_job_start` creates a visible pane and durable artifacts, returns immediately, and sends automatic readiness/completion notifications; use it for long-running tests, builds, servers, and watchers. Use `subagent` for coding-agent sessions instead.
+
+Run the package in Pi from this repository:
+
+```bash
+pi -e .
+```
+
+After `herdr_job_start`, do not poll with `herdr wait`, sleeps, loops, or repeated reads. Completion arrives as a steer message. See [`docs/herdr-panes.md`](docs/herdr-panes.md) for examples and fallback CLI use.
+
 ## Install into Pi agent instructions
 
 Install/update a managed block in the global Pi agent instructions:

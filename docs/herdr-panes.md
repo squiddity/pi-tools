@@ -29,6 +29,29 @@ Important variables:
 - For isolated implementation work, prefer Herdr worktrees or another explicit worktree flow rather than multiple writers in one checkout.
 - Install/check the Pi integration (`herdr integration install pi`, `herdr integration status`) when managing Pi agents so Herdr gets better agent state/session signals.
 
+## Async jobs from Pi
+
+When the `herdr-jobs` Pi extension is loaded, use its `herdr_job_start` tool for ordinary long-running commands. It creates the visible pane, persists a durable merged log and result sidecar, returns control to Pi immediately, and delivers one readiness/completion steer message automatically.
+
+```ts
+herdr_job_start({
+  name: "tests",
+  command: "npm test",
+  kind: "finite"
+})
+
+herdr_job_start({
+  name: "dev server",
+  command: "npm run dev",
+  kind: "service",
+  readyPattern: "Local:"
+})
+```
+
+After starting an async job, do **not** poll it with `bash`, `herdr wait`, sleeps, loops, or repeated reads. Use `herdr_job_read` only for a deliberate inspection; completion and readiness are delivered automatically. Use `subagent` instead for a coding-agent session.
+
+The direct CLI workflow below remains appropriate when the extension is unavailable or when a genuinely short synchronous gate is required.
+
 ## Open a pane for a long-running command
 
 Prefer splitting the current pane explicitly by id. For jobs started by an agent, default to a lower pane:

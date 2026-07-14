@@ -4,6 +4,9 @@ This agent may be running inside [Herdr](https://herdr.dev), a terminal workspac
 
 High-level rules:
 
+- When the `herdr_job_*` tools are available, prefer `herdr_job_start` for ordinary long-running tests, builds, servers, watchers, and tails. It returns immediately; readiness and completion arrive automatically as steer messages.
+- After `herdr_job_start`, do **not** poll with the parent `bash` tool, `herdr wait`, sleeps, repeated log reads, or loops. Use `herdr_job_read` only for an explicit inspection requested by the user or needed to diagnose a problem.
+- Use `subagent` for coding-agent sessions and `herdr_job_start` for ordinary shell commands. If the async job extension is unavailable, direct pane commands and a genuinely short synchronous `herdr wait` remain valid fallbacks.
 - Treat Herdr panes as real terminals owned by the Herdr server; they persist if the UI detaches.
 - Do not block the primary agent pane with long-running servers, watchers, or slow test loops when a Herdr side pane would be clearer.
 - For long-running jobs, open a lower pane with `herdr pane split "$HERDR_PANE_ID" --direction down ...` so the main agent stays above and the observable job runs below.
