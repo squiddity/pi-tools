@@ -33,12 +33,17 @@ The installer is idempotent and updates only the block between `BEGIN pi-tools:h
 
 ## Pi package layout
 
-This repo can also grow into a pi package later:
+This repository is one curated Pi package. Keep related resources together here; do not create a package per individual Pi tool call. Non-trivial, independently loadable tool families use matching feature directories:
 
-- `prompts/` — `/name` prompt templates
-- `skills/` — pi skills discovered from `SKILL.md`
-- `extensions/` — TypeScript extensions, custom commands, and custom tools
-- `src/` — shared TypeScript helpers for extensions
+```text
+extensions/<feature>/index.ts  # Pi extension entry point
+src/<feature>/                 # implementation helpers
+test/<feature>/                # feature tests
+```
+
+Pi discovers `extensions/*.ts` and `extensions/*/index.ts`, so extension entry points must stay at that depth. Single-file extensions may remain directly in `extensions/`. Prompts, skills, agent includes, docs, and scripts use their existing top-level directories. See [`AGENTS.md`](AGENTS.md) for the repository rules.
+
+The asynchronous Herdr jobs feature will live at `extensions/herdr-jobs/`, `src/herdr-jobs/`, and `test/herdr-jobs/`.
 
 Local test:
 

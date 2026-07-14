@@ -1,3 +1,5 @@
 # Extensions
 
-Place pi TypeScript extensions here. Pi will load `.ts` / `.js` files from this directory when the package is enabled.
+Pi loads direct `.ts` / `.js` files here and `index.ts` / `index.js` from one immediate subdirectory. Use `extensions/<feature>/index.ts` for every new multi-file extension family; put implementation helpers in the matching `src/<feature>/` directory. Do not nest an extension entry point more deeply, because Pi does not recursively discover it.
+
+Existing small standalone extensions may remain as direct files.
