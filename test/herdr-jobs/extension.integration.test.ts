@@ -53,3 +53,47 @@ test("extension start returns before a Herdr service completes and delivers read
   assert.match(messages.find((message) => message.customType === "herdr_job_result")?.content ?? "", /Exit code: 0/);
   await handlers.get("session_shutdown")({ reason: "quit" }, ctx);
 });
+
+test("extension retains a successful cleanup-never job for herdr_job_close", { skip: !enabled, timeout: 15_000 }, async () => {
+  const tools = new Map<string, any>();
+  const handlers = new Map<string, any>();
+  const messages: Array<{ customType: string; details?: { jobId?: string } }> = [];
+  const sessionDir = await mkdtemp(`${tmpdir()}/herdr-jobs-retained-`);
+  const pi = {
+    registerTool(tool: { name: string }) { tools.set(tool.name, tool); },
+    on(name: string, handler: unknown) { handlers.set(name, handler); },
+    registerMessageRenderer() {},
+    sendMessage(message: { customType: string; details?: { jobId?: string } }) { messages.push(message); },
+  } as unknown as ExtensionAPI;
+  const ctx = {
+    cwd: sessionDir,
+    hasUI: false,
+    ui: { setWidget() {}, notify() {} },
+    sessionManager: {
+      getSessionDir: () => sessionDir,
+      getSessionId: () => "retained-job-session",
+      getSessionFile: () => undefined,
+      getEntries: () => [],
+    },
+  } as unknown as ExtensionContext;
+
+  herdrJobsExtension(pi);
+  await handlers.get("session_start")({ reason: "startup" }, ctx);
+  const started = await tools.get("herdr_job_start").execute("call", {
+    name: "retained success",
+    command: "echo retained-success",
+    kind: "finite",
+    cleanup: "never",
+  }, new AbortController().signal, undefined, ctx);
+  const jobId = started.details.jobId as string;
+
+  const deadline = Date.now() + 8_000;
+  while (!messages.some((message) => message.customType === "herdr_job_result" && message.details?.jobId === jobId) && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  assert.ok(messages.some((message) => message.customType === "herdr_job_result" && message.details?.jobId === jobId));
+
+  const closed = await tools.get("herdr_job_close").execute("close", { id: jobId });
+  assert.equal(closed.details.status, "closed");
+  await handlers.get("session_shutdown")({ reason: "quit" }, ctx);
+});
