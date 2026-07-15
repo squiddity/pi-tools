@@ -81,7 +81,7 @@ test/<feature>/                # feature tests
 
 Pi discovers `extensions/*.ts` and `extensions/*/index.ts`, so extension entry points must stay at that depth. Single-file extensions may remain directly in `extensions/`. Prompts, skills, agent includes, docs, and scripts use their existing top-level directories. See [`AGENTS.md`](AGENTS.md) for the repository rules.
 
-The asynchronous Herdr jobs implementation lives at `extensions/herdr-jobs/`, `src/herdr-jobs/`, and `test/herdr-jobs/`. The experimental UI catalog lives at `extensions/ui-catalog/`, `src/ui-catalog/`, and `test/ui-catalog/`.
+The asynchronous Herdr jobs implementation lives at `extensions/herdr-jobs/`, `src/herdr-jobs/`, and `test/herdr-jobs/`. The experimental UI catalog lives at `extensions/ui-catalog/`, `src/ui-catalog/`, and `test/ui-catalog/`. The extension-only input-mapper MVP lives at `extensions/input-mapper/`, `src/input-mapper/`, and `test/input-mapper/`.
 
 Local test:
 
@@ -91,4 +91,4 @@ pi -e .
 
 ## UI playground
 
-[`ui-playground/`](ui-playground/) is a disposable project-local Pi session that loads the experimental [`ui-catalog`](extensions/ui-catalog/) extension directly through its `.pi/settings.json`; it does not require `pi install`. Start Pi from that directory and run `/ui-catalog` to test the tappable/foldable panel. The follow-on mapper and core-interaction plan is documented in [`docs/mobile-input-mapper-roadmap.md`](docs/mobile-input-mapper-roadmap.md).
+[`ui-playground/`](ui-playground/) is a disposable project-local Pi session that loads the experimental [`ui-catalog`](extensions/ui-catalog/) and [`input-mapper`](extensions/input-mapper/) extensions directly through its `.pi/settings.json`; it does not require `pi install`. Start Pi there and run `/ui-wheel-list` to test Termux wheel navigation or `/input-map status` to inspect the mapper. The follow-on mapper and core-interaction plan is documented in [`docs/mobile-input-mapper-roadmap.md`](docs/mobile-input-mapper-roadmap.md).

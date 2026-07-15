@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "profiles": {
+    "ask-user-question": {
+      "activate": {
+        "tool": "ask_user_question"
+      },
+      "mouse": {
+        "protocol": "sgr",
+        "tracking": "buttons"
+      },
+      "gestures": {
+        "thresholdCells": 2,
+        "axisLockRatio": 1.5,
+        "suppressTapAfterWheel": true
+      },
+      "mappings": [
+        { "report": "wheel-up", "send": "up" },
+        { "report": "wheel-down", "send": "down" },
+        { "report": "left-release", "send": "enter" }
+      ]
+    }
+  }
+}

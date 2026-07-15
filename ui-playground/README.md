@@ -9,7 +9,7 @@ cd /home/squiddity/projects/pi-tools/ui-playground
 pi
 ```
 
-The local [`.pi/settings.json`](.pi/settings.json) loads `../../extensions/ui-catalog` directly from this repository. Nothing is installed globally with `pi install`.
+The local [`.pi/settings.json`](.pi/settings.json) loads `../../extensions/ui-catalog` and the experimental `../../extensions/input-mapper` directly from this repository. Nothing is installed globally with `pi install`.
 
 Once Pi starts, open the experiment with:
 
@@ -18,6 +18,8 @@ Once Pi starts, open the experiment with:
 ```
 
 Tap/click **`▶ UI catalog`** to fold or expand the panel. Enter and Space provide the keyboard equivalent; Esc closes the panel.
+
+Run `/ui-wheel-list` to validate the first roadmap step: Termux wheel reports move a small list exactly like Up/Down. The input-mapper MVP is also loaded. Its Ask profile is declarative project configuration in [`.pi/input-mapper.json`](.pi/input-mapper.json), so it automatically arms while `ask_user_question` runs. Use `/input-map status`, `/input-map on ask-user-question`, `/input-map off`, and `/input-map diagnose on` to control or inspect it.
 
 ## Principles
 
@@ -35,7 +37,8 @@ The experiment is split into small, testable layers:
 1. [`src/ui-catalog/mouse.ts`](../src/ui-catalog/mouse.ts) enables SGR mouse mode while the overlay is open and parses `CSI < b ; x ; y M/m` input into button, action, modifier, and one-based terminal coordinates.
 2. [`src/ui-catalog/layout.ts`](../src/ui-catalog/layout.ts) calculates the bottom-centred overlay's exact title hit region. Its tests assert that the caret and final character of `UI catalog` are included, while adjacent cells and rows are excluded.
 3. [`src/ui-catalog/panel.ts`](../src/ui-catalog/panel.ts) owns folded/expanded state, routes the focused component's raw input through the parser, and renders diagnostics.
-4. [`extensions/ui-catalog/index.ts`](../extensions/ui-catalog/index.ts) exposes the panel as `/ui-catalog` in this playground.
+4. [`extensions/ui-catalog/index.ts`](../extensions/ui-catalog/index.ts) exposes the panel as `/ui-catalog` and `/ui-wheel-list` in this playground.
+5. [`extensions/input-mapper/index.ts`](../extensions/input-mapper/index.ts) runs the extension-only mapper MVP. It owns button+SGR reporting only while an active profile requires it, converts one report into one keyboard input, and restores reporting on close, reload, or `/input-map off`.
 
 Pi's TUI forwards raw input to a focused custom component and preserves SGR mouse sequences, but it does not enable mouse reporting for extensions. The panel writes the required enable/disable sequences through `tui.terminal.write(...)` while active. Herdr must forward those sequences to the pane for tap/clicks to arrive.
 

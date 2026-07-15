@@ -1,5 +1,6 @@
 {
   "extensions": [
-    "../../extensions/ui-catalog"
+    "../../extensions/ui-catalog",
+    "../../extensions/input-mapper"
   ]
 }
