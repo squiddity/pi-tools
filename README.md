@@ -5,11 +5,13 @@ Local repo for pi/agent tooling and reusable agent guidance.
 ## Current focus
 
 - Asynchronous Herdr jobs extension and reusable agent guidance for Pi agents running inside Herdr.
+- An extension-first mobile terminal input mapper and incremental Pi interaction roadmap.
 
 ## Includes
 
 - [`agent-includes/herdr.md`](agent-includes/herdr.md) — short high-level guidance for `AGENTS.md`.
 - [`docs/herdr-panes.md`](docs/herdr-panes.md) — deeper guide to opening, monitoring, and closing Herdr panes for long-running jobs.
+- [`docs/mobile-input-mapper-roadmap.md`](docs/mobile-input-mapper-roadmap.md) — research, architecture, configuration examples, and phased roadmap for mobile Termux input and eventual core UI actions.
 
 ## Herdr jobs extension
 
@@ -89,4 +91,4 @@ pi -e .
 
 ## UI playground
 
-[`ui-playground/`](ui-playground/) is a disposable project-local Pi session that loads the experimental [`ui-catalog`](extensions/ui-catalog/) extension directly through its `.pi/settings.json`; it does not require `pi install`. Start Pi from that directory and run `/ui-catalog` to test the tappable/foldable panel.
+[`ui-playground/`](ui-playground/) is a disposable project-local Pi session that loads the experimental [`ui-catalog`](extensions/ui-catalog/) extension directly through its `.pi/settings.json`; it does not require `pi install`. Start Pi from that directory and run `/ui-catalog` to test the tappable/foldable panel. The follow-on mapper and core-interaction plan is documented in [`docs/mobile-input-mapper-roadmap.md`](docs/mobile-input-mapper-roadmap.md).

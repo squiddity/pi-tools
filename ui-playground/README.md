@@ -47,3 +47,5 @@ Pi's TUI forwards raw input to a focused custom component and preserves SGR mous
 4. Close and reopen `/ui-catalog` so it creates a fresh panel instance.
 
 For imported helper modules, use a fresh Pi process if `/reload` retains an old module instance. This is an experimental harness, so restarting the playground is preferred to making reload behavior part of the feature contract.
+
+See [`../docs/mobile-input-mapper-roadmap.md`](../docs/mobile-input-mapper-roadmap.md) for the extension-first configurable mapper plan, phased Pi core changes, external plugin contract, and eventual transcript-block interactions.
