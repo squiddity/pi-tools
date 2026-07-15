@@ -79,10 +79,14 @@ test/<feature>/                # feature tests
 
 Pi discovers `extensions/*.ts` and `extensions/*/index.ts`, so extension entry points must stay at that depth. Single-file extensions may remain directly in `extensions/`. Prompts, skills, agent includes, docs, and scripts use their existing top-level directories. See [`AGENTS.md`](AGENTS.md) for the repository rules.
 
-The asynchronous Herdr jobs implementation lives at `extensions/herdr-jobs/`, `src/herdr-jobs/`, and `test/herdr-jobs/`.
+The asynchronous Herdr jobs implementation lives at `extensions/herdr-jobs/`, `src/herdr-jobs/`, and `test/herdr-jobs/`. The experimental UI catalog lives at `extensions/ui-catalog/`, `src/ui-catalog/`, and `test/ui-catalog/`.
 
 Local test:
 
 ```bash
 pi -e .
 ```
+
+## UI playground
+
+[`ui-playground/`](ui-playground/) is a disposable project-local Pi session that loads the experimental [`ui-catalog`](extensions/ui-catalog/) extension directly through its `.pi/settings.json`; it does not require `pi install`. Start Pi from that directory and run `/ui-catalog` to test the tappable/foldable panel.
