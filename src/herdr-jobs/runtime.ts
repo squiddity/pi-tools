@@ -16,9 +16,13 @@ export interface HerdrJobsRuntime {
 const RUNTIME_KEY = Symbol.for("pi-tools/herdr-jobs/runtime");
 
 export function getRuntime(): HerdrJobsRuntime {
-  const holder = globalThis as typeof globalThis & { [RUNTIME_KEY]?: HerdrJobsRuntime };
+  const holder = globalThis as typeof globalThis & { [RUNTIME_KEY]?: Partial<HerdrJobsRuntime> };
   if (!holder[RUNTIME_KEY]) holder[RUNTIME_KEY] = { jobs: new Map(), deliveryLocks: new Map() };
-  return holder[RUNTIME_KEY];
+  // Runtime objects survive /reload under a global symbol. Add fields introduced
+  // by newer extension versions before a preserved watcher can use them.
+  if (!holder[RUNTIME_KEY].jobs) holder[RUNTIME_KEY].jobs = new Map();
+  if (!holder[RUNTIME_KEY].deliveryLocks) holder[RUNTIME_KEY].deliveryLocks = new Map();
+  return holder[RUNTIME_KEY] as HerdrJobsRuntime;
 }
 
 export function createRunningJob(metadata: PersistedJobMetadata, paths: JobPaths): RunningJob {
