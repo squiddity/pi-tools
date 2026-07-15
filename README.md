@@ -23,6 +23,14 @@ pi -e .
 
 After `herdr_job_start`, do not poll with `herdr wait`, sleeps, loops, or repeated reads. Completion arrives as a steer message. See [`docs/herdr-panes.md`](docs/herdr-panes.md) for examples and fallback CLI use.
 
+## Acknowledgements
+
+The async Herdr jobs extension borrows orchestration ideas and notification/widget formatting from [pi-herdr-subagents](https://github.com/0xRichardH/pi-herdr-subagents/tree/d654eae75ff347ccb618113f2af85f3040d9ade9). It is an independently implemented, command-focused runner rather than a fork. See [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for the upstream MIT notice.
+
+## License
+
+This project is licensed under the [MIT License](LICENSE). Third-party notices are in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+
 ## Install into Pi
 
 Install the complete `pi-tools` package globally:

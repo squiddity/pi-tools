@@ -2,6 +2,7 @@
   "name": "pi-tools",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "description": "Local pi tools and reusable agent guidance.",
   "type": "module",
   "keywords": [
