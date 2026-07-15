@@ -46,9 +46,18 @@ herdr_job_start({
   kind: "service",
   readyPattern: "Local:"
 })
+
+herdr_job_start({
+  name: "integration",
+  command: "npm run test:integration",
+  kind: "finite",
+  cleanup: "never"
+})
 ```
 
-After starting an async job, do **not** poll it with `bash`, `herdr wait`, sleeps, loops, or repeated reads. Use `herdr_job_read` only for a deliberate inspection; completion and readiness are delivered automatically. Use `subagent` instead for a coding-agent session.
+`cleanup` controls the terminal pane: `"on_success"` (the default) closes a successful job and retains failures, `"always"` closes either outcome, and `"never"` retains either outcome. The deprecated `keepPane` alias remains supported for old calls (`true` maps to `"never"`; `false` maps to `"always"`), but cannot be combined with `cleanup`.
+
+After starting an async job, do **not** poll it with `bash`, `herdr wait`, sleeps, loops, or repeated reads. Use `herdr_job_read` only for a deliberate inspection; completion and readiness are delivered automatically. Retained terminal jobs remain available to `herdr_job_read` and `herdr_job_close`. Use `subagent` instead for a coding-agent session.
 
 The direct CLI workflow below remains appropriate when the extension is unavailable or when a genuinely short synchronous gate is required.
 

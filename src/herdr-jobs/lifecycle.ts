@@ -53,7 +53,7 @@ export function markFailure(lifecycle: JobLifecycle, error: string, now: number)
 }
 
 export function markClosed(lifecycle: JobLifecycle, now: number): JobLifecycle {
-  if (terminal(lifecycle.process)) return lifecycle;
+  if (lifecycle.process.kind === "closed") return lifecycle;
   return { ...lifecycle, delivery: "suppressed", process: { kind: "closed", startedAt: startedAt(lifecycle.process), closedAt: now } };
 }
 

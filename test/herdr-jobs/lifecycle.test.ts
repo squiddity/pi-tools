@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createLifecycle, markInterruptRequested, markReady, markReadyTimeout, markResult, projectLifecycle } from "../../src/herdr-jobs/lifecycle.ts";
+import { createLifecycle, markClosed, markInterruptRequested, markReady, markReadyTimeout, markResult, projectLifecycle } from "../../src/herdr-jobs/lifecycle.ts";
 
 test("lifecycle projects running, readiness, interruption, and terminal result", () => {
   let lifecycle = createLifecycle(100, "READY");
@@ -11,6 +11,14 @@ test("lifecycle projects running, readiness, interruption, and terminal result",
   assert.equal(projectLifecycle(lifecycle, 105), "interrupt requested");
   lifecycle = markResult(lifecycle, { version: 1, id: "abcdefgh", exitCode: 130, startedAt: 100, completedAt: 106 });
   assert.equal(projectLifecycle(lifecycle, 107), "failed");
+});
+
+test("explicit close suppresses delivery even after completion", () => {
+  let lifecycle = createLifecycle(100);
+  lifecycle = markResult(lifecycle, { version: 1, id: "abcdefgh", exitCode: 0, startedAt: 100, completedAt: 101 });
+  lifecycle = markClosed(lifecycle, 102);
+  assert.equal(lifecycle.delivery, "suppressed");
+  assert.equal(projectLifecycle(lifecycle, 103), "closed");
 });
 
 test("readiness timeout happens only once", () => {

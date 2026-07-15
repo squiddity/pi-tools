@@ -67,8 +67,16 @@ export function parseMetadata(value: unknown): PersistedJobMetadata | null {
   if (item.placement !== "down" && item.placement !== "right" && item.placement !== "tab") return null;
   if (typeof item.paneId !== "string" || !item.paneId || typeof item.startedAt !== "number") return null;
   if (item.delivery !== "pending" && item.delivery !== "delivered" && item.delivery !== "suppressed") return null;
-  if (typeof item.readyRegex !== "boolean" || typeof item.keepPane !== "boolean" || typeof item.state !== "string") return null;
-  return item as PersistedJobMetadata;
+  if (typeof item.readyRegex !== "boolean" || typeof item.state !== "string") return null;
+
+  // v1 initially persisted keepPane. Keep those durable artifacts readable while
+  // writing the explicit cleanup policy for all new jobs.
+  const legacy = item as Partial<PersistedJobMetadata> & { keepPane?: unknown };
+  const cleanup = item.cleanup === "on_success" || item.cleanup === "always" || item.cleanup === "never"
+    ? item.cleanup
+    : legacy.keepPane === true ? "never" : legacy.keepPane === false ? "always" : null;
+  if (!cleanup) return null;
+  return { ...item, cleanup } as PersistedJobMetadata;
 }
 
 export function parseResult(value: unknown, expectedId: string): JobResultArtifact | null {
@@ -83,16 +91,18 @@ export async function readResult(paths: JobPaths, id: string): Promise<JobResult
   return parseResult(await readJsonIfPresent(paths.resultFile), id);
 }
 
-export async function readLogChunk(path: string, offset: number): Promise<{ bytes: Buffer; nextOffset: number }> {
+export async function readLogChunk(path: string, offset: number, maximumBytes = 64 * 1024): Promise<{ bytes: Buffer; nextOffset: number }> {
   try {
     const info = await stat(path);
     if (info.size <= offset) return { bytes: Buffer.alloc(0), nextOffset: Math.max(0, info.size) };
     const handle = await open(path, "r");
     try {
-      const size = info.size - offset;
+      // A single noisy polling interval must not allocate an unbounded buffer.
+      // Returning a partial chunk lets the next poll continue at the byte offset.
+      const size = Math.min(info.size - offset, Math.max(1, Math.floor(maximumBytes)));
       const bytes = Buffer.alloc(size);
-      await handle.read(bytes, 0, size, offset);
-      return { bytes, nextOffset: info.size };
+      const { bytesRead } = await handle.read(bytes, 0, size, offset);
+      return { bytes: bytes.subarray(0, bytesRead), nextOffset: offset + bytesRead };
     } finally {
       await handle.close();
     }

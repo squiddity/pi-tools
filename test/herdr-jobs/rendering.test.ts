@@ -3,7 +3,7 @@ import test from "node:test";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import herdrJobsExtension from "../../extensions/herdr-jobs/index.ts";
 
-test("result messages use a coloured box and hide log output until expanded", () => {
+test("result messages use a coloured box and hide log output until expanded", async () => {
   const renderers = new Map<string, any>();
   const tools = new Map<string, any>();
   const pi = {
@@ -37,4 +37,9 @@ test("result messages use a coloured box and hide log output until expanded", ()
   const startCall = tools.get("herdr_job_start").renderCall({}, theme).render(160).join("\n");
   assert.match(startCall, /herdr job start/);
   assert.doesNotMatch(startCall, /herdr_job_start/);
+
+  await assert.rejects(
+    tools.get("herdr_job_start").execute("call", { name: "tests", command: "echo test", cleanup: "always", keepPane: false }),
+    /cleanup or keepPane/,
+  );
 });

@@ -8,9 +8,9 @@ import { createJobId, ensureJobDirectory, getArtifactRoot, getJobPaths, listMeta
 import { formatElapsed, formatFailureMessage, formatReadyMessage, formatReadyTimeoutMessage, formatResultMessage, jobSummary } from "../../src/herdr-jobs/format.ts";
 import { ensureHerdrAvailable, herdr, shellReadyDelayMs } from "../../src/herdr-jobs/herdr.ts";
 import { isActive, markClosed, markInterruptRequested, markResult, projectLifecycle } from "../../src/herdr-jobs/lifecycle.ts";
-import { createRunningJob, getRuntime, hasSessionDelivery, persistJob, clearWidgetTimer } from "../../src/herdr-jobs/runtime.ts";
+import { createRunningJob, getRuntime, hasSessionDelivery, persistJob, clearWidgetTimer, withDeliveryLock } from "../../src/herdr-jobs/runtime.ts";
 import { paneRunCommand, writeRunnerFiles } from "../../src/herdr-jobs/runner.ts";
-import type { JobKind, Placement, RunningJob, WatchEvent } from "../../src/herdr-jobs/types.ts";
+import type { CleanupPolicy, JobKind, PersistedJobMetadata, Placement, RunningJob, WatchEvent } from "../../src/herdr-jobs/types.ts";
 import { watchJob } from "../../src/herdr-jobs/watcher.ts";
 
 const runtime = getRuntime();
@@ -24,6 +24,8 @@ const START_SCHEMA = Type.Object({
   readyPattern: Type.Optional(Type.String({ description: "Substring or regular expression to detect in the durable output log." })),
   readyRegex: Type.Optional(Type.Boolean()),
   readyTimeoutMs: Type.Optional(Type.Integer({ minimum: 0 })),
+  cleanup: Type.Optional(StringEnum(["on_success", "always", "never"] as const)),
+  // Deprecated compatibility alias. true maps to never; false maps to always.
   keepPane: Type.Optional(Type.Boolean()),
 });
 
@@ -33,6 +35,17 @@ function textResult(text: string, details: Record<string, unknown> = {}) {
 
 function sleep(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+function resolveCleanup(cleanup: CleanupPolicy | undefined, keepPane: boolean | undefined): CleanupPolicy {
+  if (cleanup !== undefined && keepPane !== undefined) throw new Error("Specify cleanup or keepPane, not both.");
+  if (cleanup) return cleanup;
+  if (keepPane !== undefined) return keepPane ? "never" : "always";
+  return "on_success";
+}
+
+function shouldCloseAfterTerminal(job: RunningJob, exitCode: number | undefined): boolean {
+  return job.metadata.cleanup === "always" || (job.metadata.cleanup === "on_success" && exitCode === 0);
 }
 
 function panelTop(title: string, info: string, width: number, border: (text: string) => string): string {
@@ -64,7 +77,8 @@ function panelBottom(width: number, border: (text: string) => string): string {
 function updateWidget(): void {
   const ctx = runtime.latestCtx;
   if (!ctx?.hasUI) return;
-  if (runtime.jobs.size === 0) {
+  const activeJobs = [...runtime.jobs.values()].filter((job) => isActive(job.lifecycle));
+  if (activeJobs.length === 0) {
     ctx.ui.setWidget("herdr-jobs", undefined);
     clearWidgetTimer(runtime);
     return;
@@ -73,8 +87,8 @@ function updateWidget(): void {
     invalidate() {},
     render(width: number) {
       const now = Date.now();
-      const jobs = [...runtime.jobs.values()];
-      const active = jobs.filter((job) => isActive(job.lifecycle)).length;
+      const jobs = [...runtime.jobs.values()].filter((job) => isActive(job.lifecycle));
+      const active = jobs.length;
       const ready = jobs.filter((job) => job.lifecycle.readiness.kind === "ready").length;
       const info = `${active} active${ready ? ` · ${ready} ready` : ""}`;
       const border = (text: string) => theme.fg("accent", text);
@@ -98,55 +112,74 @@ function startWidgetRefresh(): void {
   updateWidget();
 }
 
+function eventKey(job: RunningJob, event: WatchEvent): string {
+  return `${job.metadata.id}:${event.kind === "ready" ? "ready" : event.kind === "ready_timeout" ? "status" : "result"}`;
+}
+
+function belongsToCurrentSession(job: RunningJob): boolean {
+  return runtime.sessionId === job.metadata.parentSessionId;
+}
+
 async function deliverEvent(job: RunningJob, event: WatchEvent): Promise<void> {
-  const pi = runtime.pi;
-  const ctx = runtime.latestCtx;
-  if (!pi || !ctx || job.lifecycle.delivery === "suppressed") return;
+  if (!belongsToCurrentSession(job) || job.lifecycle.delivery === "suppressed") return;
+  await withDeliveryLock(runtime, eventKey(job, event), async () => {
+    if (!belongsToCurrentSession(job) || job.lifecycle.delivery === "suppressed") return;
+    const ctx = runtime.latestCtx;
+    if (!ctx) return;
 
-  if (event.kind === "ready") {
-    if (job.lifecycle.readyDelivered || hasSessionDelivery(ctx, job.metadata.id, "ready")) return;
-    job.lifecycle.readyDelivered = true;
-    await persistJob(job);
-    pi.sendMessage({ customType: "herdr_job_ready", content: formatReadyMessage(job, event.matchedText), display: true, details: { jobId: job.metadata.id, event: "ready", paneId: job.metadata.paneId } }, { triggerTurn: true, deliverAs: "steer" });
-    updateWidget();
-    return;
-  }
+    if (event.kind === "ready") {
+      if (job.lifecycle.readyDelivered || hasSessionDelivery(ctx, job.metadata.id, "ready")) return;
+      job.lifecycle.readyDelivered = true;
+      await persistJob(job);
+      if (!belongsToCurrentSession(job) || !runtime.pi || !runtime.latestCtx) return;
+      runtime.pi.sendMessage({ customType: "herdr_job_ready", content: formatReadyMessage(job, event.matchedText), display: true, details: { jobId: job.metadata.id, event: "ready", paneId: job.metadata.paneId } }, { triggerTurn: true, deliverAs: "steer" });
+      updateWidget();
+      return;
+    }
 
-  if (event.kind === "ready_timeout") {
-    if (job.lifecycle.timeoutDelivered || hasSessionDelivery(ctx, job.metadata.id, "status")) return;
-    job.lifecycle.timeoutDelivered = true;
-    await persistJob(job);
-    pi.sendMessage({ customType: "herdr_job_status", content: formatReadyTimeoutMessage(job), display: true, details: { jobId: job.metadata.id, event: "status", paneId: job.metadata.paneId, status: "ready_timeout" } }, { triggerTurn: true, deliverAs: "steer" });
-    updateWidget();
-    return;
-  }
+    if (event.kind === "ready_timeout") {
+      if (job.lifecycle.timeoutDelivered || hasSessionDelivery(ctx, job.metadata.id, "status")) return;
+      job.lifecycle.timeoutDelivered = true;
+      await persistJob(job);
+      if (!belongsToCurrentSession(job) || !runtime.pi || !runtime.latestCtx) return;
+      runtime.pi.sendMessage({ customType: "herdr_job_status", content: formatReadyTimeoutMessage(job), display: true, details: { jobId: job.metadata.id, event: "status", paneId: job.metadata.paneId, status: "ready_timeout" } }, { triggerTurn: true, deliverAs: "steer" });
+      updateWidget();
+      return;
+    }
 
-  if (job.lifecycle.delivery !== "pending" || hasSessionDelivery(ctx, job.metadata.id, "result")) {
+    const exitCode = event.kind === "result" ? event.result.exitCode : undefined;
+    if (job.lifecycle.delivery !== "pending" || hasSessionDelivery(ctx, job.metadata.id, "result")) {
+      job.lifecycle.delivery = "delivered";
+      await persistJob(job);
+      if (!belongsToCurrentSession(job)) return;
+      if (shouldCloseAfterTerminal(job, exitCode)) {
+        try { await herdr.closePane(job.metadata.paneId); } catch { /* terminal artifacts remain available */ }
+        runtime.jobs.delete(job.metadata.id);
+      }
+      updateWidget();
+      return;
+    }
+
+    const failure = event.kind === "failure" ? event.error : undefined;
+    const content = exitCode === undefined
+      ? await formatFailureMessage(job, failure ?? "herdr job watcher failed.")
+      : await formatResultMessage(job, exitCode);
+    if (!belongsToCurrentSession(job)) return;
     job.lifecycle.delivery = "delivered";
     await persistJob(job);
-    runtime.jobs.delete(job.metadata.id);
+    if (!belongsToCurrentSession(job) || !runtime.pi || !runtime.latestCtx) return;
+    if (shouldCloseAfterTerminal(job, exitCode)) {
+      try { await herdr.closePane(job.metadata.paneId); } catch { /* result artifact has already been preserved */ }
+      runtime.jobs.delete(job.metadata.id);
+    }
     updateWidget();
-    return;
-  }
-
-  const exitCode = event.kind === "result" ? event.result.exitCode : undefined;
-  const failure = event.kind === "failure" ? event.error : undefined;
-  const content = exitCode === undefined
-    ? await formatFailureMessage(job, failure ?? "herdr job watcher failed.")
-    : await formatResultMessage(job, exitCode);
-  job.lifecycle.delivery = "delivered";
-  await persistJob(job);
-  if (!job.metadata.keepPane) {
-    try { await herdr.closePane(job.metadata.paneId); } catch { /* result artifact has already been preserved */ }
-  }
-  runtime.jobs.delete(job.metadata.id);
-  updateWidget();
-  pi.sendMessage({
-    customType: "herdr_job_result",
-    content,
-    display: true,
-    details: { jobId: job.metadata.id, event: "result", paneId: job.metadata.paneId, ...(exitCode === undefined ? { error: failure } : { exitCode }) },
-  }, { triggerTurn: true, deliverAs: "steer" });
+    runtime.pi.sendMessage({
+      customType: "herdr_job_result",
+      content,
+      display: true,
+      details: { jobId: job.metadata.id, event: "result", paneId: job.metadata.paneId, ...(exitCode === undefined ? { error: failure } : { exitCode }) },
+    }, { triggerTurn: true, deliverAs: "steer" });
+  });
 }
 
 function startWatcher(job: RunningJob): void {
@@ -199,18 +232,28 @@ async function reattach(ctx: ExtensionContext): Promise<void> {
 }
 
 export default function herdrJobsExtension(pi: ExtensionAPI) {
-  runtime.pi = pi;
-
   pi.on("session_start", async (_event, ctx) => {
     runtime.pi = pi;
     runtime.latestCtx = ctx;
+    runtime.sessionId = ctx.sessionManager.getSessionId();
     updateWidget();
     await reattach(ctx);
   });
 
   pi.on("session_shutdown", async (event) => {
     clearWidgetTimer(runtime);
-    if (event.reason === "reload") return;
+    if (event.reason === "reload") {
+      // Keep watcher state, but never pair the reloaded extension API with the
+      // old session context while Pi is rebuilding its extension bindings.
+      runtime.pi = undefined;
+      runtime.latestCtx = undefined;
+      return;
+    }
+    // Invalidate delivery before aborting so an in-flight formatter cannot send
+    // an event into a session which has already been replaced.
+    runtime.sessionId = undefined;
+    runtime.latestCtx = undefined;
+    runtime.pi = undefined;
     for (const job of runtime.jobs.values()) job.abortController?.abort();
     runtime.jobs.clear();
   });
@@ -259,6 +302,7 @@ export default function herdrJobsExtension(pi: ExtensionAPI) {
       if (!name || name.length > 80) throw new Error("herdr job name must contain 1–80 characters.");
       if (!command) throw new Error("herdr job command must not be empty.");
       if (params.readyTimeoutMs !== undefined && !params.readyPattern) throw new Error("readyTimeoutMs requires readyPattern.");
+      const cleanup = resolveCleanup(params.cleanup, params.keepPane);
       if (params.readyPattern && params.readyRegex) {
         try { new RegExp(params.readyPattern); } catch (error) { throw new Error(`Invalid readiness regular expression: ${error instanceof Error ? error.message : String(error)}`); }
       }
@@ -275,13 +319,14 @@ export default function herdrJobsExtension(pi: ExtensionAPI) {
       const paths = getJobPaths(root, id);
       await ensureJobDirectory(paths);
       let paneId: string | undefined;
+      let metadata: PersistedJobMetadata | undefined;
       try {
         paneId = await herdr.createPane({ name, cwd, placement, ratio });
         try { await herdr.renamePane(paneId, name); } catch { /* pane labels are cosmetic */ }
-        const metadata = {
+        metadata = {
           version: 1 as const, id, parentSessionId: ctx.sessionManager.getSessionId(), parentSessionFile: ctx.sessionManager.getSessionFile(), name, command, cwd, kind, paneId, placement, createdAt: startedAt, startedAt,
           ...(params.readyPattern ? { readyPattern: params.readyPattern } : {}), readyRegex: params.readyRegex ?? false,
-          ...(params.readyTimeoutMs !== undefined ? { readyTimeoutMs: params.readyTimeoutMs } : {}), keepPane: params.keepPane ?? true, delivery: "pending" as const, state: "launching",
+          ...(params.readyTimeoutMs !== undefined ? { readyTimeoutMs: params.readyTimeoutMs } : {}), cleanup, delivery: "pending" as const, state: "launching",
         };
         await writeRunnerFiles({ id, command: params.command, cwd, paths, startedAt });
         await writeAtomicJson(paths.metadataFile, metadata);
@@ -290,8 +335,14 @@ export default function herdrJobsExtension(pi: ExtensionAPI) {
         const job = createRunningJob(metadata, paths);
         runtime.jobs.set(id, job);
         startWatcher(job);
-        return textResult(`herdr job "${name}" started in pane ${paneId}. Do not poll it; completion will be delivered automatically.`, { jobId: id, paneId, name, kind, cwd, artifactDir: paths.root, logFile: paths.logFile, status: "started" });
+        return textResult(`herdr job "${name}" started in pane ${paneId}. Do not poll it; completion will be delivered automatically.`, { jobId: id, paneId, name, kind, cwd, artifactDir: paths.root, logFile: paths.logFile, cleanup, status: "started" });
       } catch (error) {
+        // The start tool is already reporting this failure synchronously. Do not
+        // leave a pending artifact that a future resume would misreport as a
+        // vanished background pane.
+        if (metadata) {
+          try { await writeAtomicJson(paths.metadataFile, { ...metadata, delivery: "suppressed", state: "launch_failed" }); } catch { /* best effort */ }
+        }
         if (paneId) { try { await herdr.closePane(paneId); } catch { /* best effort */ } }
         throw error;
       }

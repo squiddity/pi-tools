@@ -4,7 +4,7 @@ Local repo for pi/agent tooling and reusable agent guidance.
 
 ## Current focus
 
-- Agent includes for Herdr: reusable Markdown guidance that can be imported or pasted into `AGENTS.md` for agents running inside Herdr.
+- Asynchronous Herdr jobs extension and reusable agent guidance for Pi agents running inside Herdr.
 
 ## Includes
 
@@ -71,7 +71,7 @@ test/<feature>/                # feature tests
 
 Pi discovers `extensions/*.ts` and `extensions/*/index.ts`, so extension entry points must stay at that depth. Single-file extensions may remain directly in `extensions/`. Prompts, skills, agent includes, docs, and scripts use their existing top-level directories. See [`AGENTS.md`](AGENTS.md) for the repository rules.
 
-The asynchronous Herdr jobs feature will live at `extensions/herdr-jobs/`, `src/herdr-jobs/`, and `test/herdr-jobs/`.
+The asynchronous Herdr jobs implementation lives at `extensions/herdr-jobs/`, `src/herdr-jobs/`, and `test/herdr-jobs/`.
 
 Local test:
 

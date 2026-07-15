@@ -6,6 +6,7 @@ export const JOB_RESULT_VERSION = 1 as const;
 export type JobKind = "finite" | "service";
 export type Placement = "down" | "right" | "tab";
 export type DeliveryState = "pending" | "delivered" | "suppressed";
+export type CleanupPolicy = "on_success" | "always" | "never";
 
 export interface JobPaths {
   root: string;
@@ -32,7 +33,7 @@ export interface PersistedJobMetadata {
   readyPattern?: string;
   readyRegex: boolean;
   readyTimeoutMs?: number;
-  keepPane: boolean;
+  cleanup: CleanupPolicy;
   delivery: DeliveryState;
   state: string;
 }

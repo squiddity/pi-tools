@@ -9,13 +9,15 @@ export interface HerdrJobsRuntime {
   pi?: ExtensionAPI;
   latestCtx?: ExtensionContext;
   widgetInterval?: ReturnType<typeof setInterval>;
+  sessionId?: string;
+  deliveryLocks: Map<string, Promise<void>>;
 }
 
 const RUNTIME_KEY = Symbol.for("pi-tools/herdr-jobs/runtime");
 
 export function getRuntime(): HerdrJobsRuntime {
   const holder = globalThis as typeof globalThis & { [RUNTIME_KEY]?: HerdrJobsRuntime };
-  if (!holder[RUNTIME_KEY]) holder[RUNTIME_KEY] = { jobs: new Map() };
+  if (!holder[RUNTIME_KEY]) holder[RUNTIME_KEY] = { jobs: new Map(), deliveryLocks: new Map() };
   return holder[RUNTIME_KEY];
 }
 
@@ -46,6 +48,23 @@ export function hasSessionDelivery(ctx: ExtensionContext, jobId: string, event: 
     const item = entry as unknown as { type?: string; customType?: string; details?: { jobId?: unknown; event?: unknown } };
     return item.type === "custom_message" && item.details?.jobId === jobId && item.details?.event === event;
   });
+}
+
+export async function withDeliveryLock(runtime: HerdrJobsRuntime, key: string, run: () => Promise<void>): Promise<void> {
+  const existing = runtime.deliveryLocks.get(key);
+  if (existing) {
+    await existing;
+    return withDeliveryLock(runtime, key, run);
+  }
+  let release!: () => void;
+  const lock = new Promise<void>((resolve) => { release = resolve; });
+  runtime.deliveryLocks.set(key, lock);
+  try {
+    await run();
+  } finally {
+    runtime.deliveryLocks.delete(key);
+    release();
+  }
 }
 
 export function clearWidgetTimer(runtime: HerdrJobsRuntime): void {

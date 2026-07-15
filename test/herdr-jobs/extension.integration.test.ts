@@ -40,7 +40,6 @@ test("extension start returns before a Herdr service completes and delivers read
     command: "printf READY_TOKEN; sleep 1; exit 0",
     kind: "service",
     readyPattern: "READY_TOKEN",
-    keepPane: false,
   }, new AbortController().signal, undefined, ctx);
   assert.ok(Date.now() - startedAt < 1_500, "start tool should return after pane launch, not process completion");
   assert.equal(result.details.status, "started");

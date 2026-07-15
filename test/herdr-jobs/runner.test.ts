@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import test from "node:test";
 import { getJobPaths, ensureJobDirectory, readResult } from "../../src/herdr-jobs/artifacts.ts";
-import { paneRunCommand, shellQuote, writeRunnerFiles } from "../../src/herdr-jobs/runner.ts";
+import { completionMarker, paneRunCommand, shellQuote, writeRunnerFiles } from "../../src/herdr-jobs/runner.ts";
 
 const execFileAsync = promisify(execFile);
 
@@ -14,6 +14,10 @@ test("shellQuote handles spaces and single quotes", async () => {
   const quoted = shellQuote("a path/it's safe");
   const { stdout } = await execFileAsync("bash", ["-c", `printf %s ${quoted}`]);
   assert.equal(stdout, "a path/it's safe");
+});
+
+test("completion marker has a printf placeholder for the fallback exit code", () => {
+  assert.equal(completionMarker("abcdefgh"), "__PI_HERDR_JOB_abcdefgh_DONE_%s__");
 });
 
 test("wrapper preserves command exit code and atomically publishes result", async () => {

@@ -1,7 +1,7 @@
 import { StringDecoder } from "node:string_decoder";
 import { readLogChunk, readResult } from "./artifacts.ts";
 import { markFailure, markPaneMissing, markPanePresent, markPaneUnavailable, markReady, markReadyTimeout, markResult, readinessWaiting } from "./lifecycle.ts";
-import type { HerdrOperations, RunningJob, WatchEvent } from "./types.ts";
+import type { HerdrOperations, PaneInspection, RunningJob, WatchEvent } from "./types.ts";
 
 const POLL_MS = 750;
 const PANE_POLL_MS = 2_500;
@@ -94,12 +94,20 @@ export async function watchJob(
 
     if (now - job.lastPaneCheckAt >= PANE_POLL_MS) {
       job.lastPaneCheckAt = now;
-      const inspection = await operations.inspectPane(job.metadata.paneId);
-      if (inspection.kind === "present") {
-        job.lifecycle = markPanePresent(job.lifecycle);
-      } else if (inspection.kind === "unavailable") {
+      let inspection: PaneInspection | undefined;
+      try {
+        inspection = await operations.inspectPane(job.metadata.paneId);
+      } catch {
+        // CLI/socket glitches are not evidence that a pane vanished. Let the
+        // lifecycle project a stalled state only after its normal grace period.
         job.lifecycle = markPaneUnavailable(job.lifecycle, now);
-      } else {
+        inspection = undefined;
+      }
+      if (inspection?.kind === "present") {
+        job.lifecycle = markPanePresent(job.lifecycle);
+      } else if (inspection?.kind === "unavailable") {
+        job.lifecycle = markPaneUnavailable(job.lifecycle, now);
+      } else if (inspection?.kind === "missing") {
         job.lifecycle = markPaneMissing(job.lifecycle, now);
         await abortableDelay(PANE_MISSING_GRACE_MS, signal);
         const racedResult = await readResult(job.paths, job.metadata.id);

@@ -6,7 +6,7 @@ export function shellQuote(value: string): string {
   return `'${value.replaceAll("'", "'\\''")}'`;
 }
 
-export function completionMarker(jobId: string, exitCode = "${job_exit}"): string {
+export function completionMarker(jobId: string, exitCode = "%s"): string {
   return `__PI_HERDR_JOB_${jobId}_DONE_${exitCode}__`;
 }
 

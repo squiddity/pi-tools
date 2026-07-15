@@ -6,4 +6,4 @@ Existing small standalone extensions may remain as direct files.
 
 ## Herdr jobs
 
-[`herdr-jobs/index.ts`](herdr-jobs/index.ts) registers the asynchronous `herdr_job_*` tool family. Its implementation lives in [`../src/herdr-jobs/`](../src/herdr-jobs/), and matching tests live in [`../test/herdr-jobs/`](../test/herdr-jobs/).
+[`herdr-jobs/index.ts`](herdr-jobs/index.ts) registers the asynchronous `herdr_job_*` tool family. `herdr_job_start` returns after launch and delivers readiness/completion automatically; it uses durable logs and result sidecars. Its `cleanup` policy defaults to `"on_success"`, retaining failed panes for inspection. Implementation lives in [`../src/herdr-jobs/`](../src/herdr-jobs/), and matching tests live in [`../test/herdr-jobs/`](../test/herdr-jobs/).
