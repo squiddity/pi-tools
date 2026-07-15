@@ -9,7 +9,7 @@ Local repo for pi/agent tooling and reusable agent guidance.
 
 ## Mobile mapper progress
 
-Recommended implementation steps 1–2 are complete: the disposable wheel/list experiment is available as `/ui-wheel-list`, and the extension-only mapper MVP is available as `/input-map`. The Ask profile is configured by [`ui-playground/.pi/input-mapper.json`](ui-playground/.pi/input-mapper.json), with a reusable sample in [`docs/input-mapper.ask-user-question.example.json`](docs/input-mapper.ask-user-question.example.json). Step 3—validating a second independent plugin—remains next.
+Recommended implementation steps 1–3 are complete: the disposable wheel/list experiment is available as `/ui-wheel-list`; the extension-only mapper MVP is available as `/input-map`; and the independent Herdr jobs status widget has a configuration-only mapper profile that sends its supported F8 shortcut. Ask and Herdr profiles are configured by [`ui-playground/.pi/input-mapper.json`](ui-playground/.pi/input-mapper.json), with reusable samples in [`docs/`](docs/). Broader mapping work for other extensions is intentionally deferred.
 
 ## Includes
 

@@ -18,13 +18,14 @@ The central rule is: **Pi core should own only facts an extension cannot safely 
 
 ## Implementation status (2026-07-15)
 
-Recommended implementation steps **1** and **2** are complete in this repository:
+Recommended implementation steps **1**, **2**, and **3** are complete in this repository:
 
 - [`extensions/ui-catalog/index.ts`](../extensions/ui-catalog/index.ts) exposes `/ui-wheel-list`, a disposable wheel-to-list experiment; its selection behavior has unit coverage.
 - [`extensions/input-mapper/index.ts`](../extensions/input-mapper/index.ts) supplies the extension-only mapper MVP: SGR parsing, one-report-to-one-key mapping, tool lifecycle activation, direct mouse ownership through a persistent zero-line widget, JSON configuration, diagnostics, and `/input-map off` cleanup.
 - Profiles are configuration-owned, not built in. The Ask profile is installed for the playground in [`../ui-playground/.pi/input-mapper.json`](../ui-playground/.pi/input-mapper.json), with the same reusable sample at [`input-mapper.ask-user-question.example.json`](input-mapper.ask-user-question.example.json).
+- [`extensions/herdr-jobs/index.ts`](../extensions/herdr-jobs/index.ts) now has a supported F8 shortcut to collapse/expand its status widget. The separate [`input-mapper.herdr-jobs.example.json`](input-mapper.herdr-jobs.example.json) profile maps a conservative same-cell tap to that shortcut, with no mapper-specific code or private access in Herdr jobs.
 
-This means the implementation work for those two recommended steps is complete; it does **not** claim that every Phase 1 exit criterion is complete. In particular, the independent-plugin validation in recommended step 3, broader Ask scenario testing, and cross-transport/manual compatibility coverage remain outstanding.
+This completes the selected second-extension validation for step 3. The Herdr profile is deliberately manual and maps any tap while enabled; it is not panel-local hit testing. Broader profile discovery or mapping work for other extensions is deferred to step 4 / Phase 2, alongside broader Ask scenario testing and cross-transport/manual compatibility coverage.
 
 ## Executive summary
 
@@ -1159,8 +1160,8 @@ Always-on tracking intercepts Termux native scrolling and selection. Use active 
 
 1. **Complete** — Add wheel/list experiments to `ui-playground` and validate directly in Termux.
 2. **Complete** — Implement mapper MVP with tool lifecycle, direct mouse ownership, config, diagnostics, and Ask profile.
-3. **Next** — Validate a second independent keyboard-driven plugin using only configuration.
-4. Add agent `inspect/propose/write/test` workflow and profile confidence output.
+3. **Complete** — Validate a second independent keyboard-driven extension using only configuration: the Herdr jobs status widget maps a same-cell tap to its supported F8 shortcut.
+4. **Deferred** — Add agent `inspect/propose/write/test` workflow and profile confidence output; this is where broader mapping work for other extensions resumes.
 5. Define the mapper SDK and paired surface lifecycle contract; integrate Ask first.
 6. Upstream or prototype core change 1: mouse-reporting lease; migrate mapper ownership.
 7. Upstream or prototype core change 2: `OverlayHandle.toLocalPoint()`; add owner-registered dynamic targets.
