@@ -16,6 +16,16 @@ The ordering is deliberate:
 
 The central rule is: **Pi core should own only facts an extension cannot safely know or coordinate.** Protocol decoding, gestures, mobile policy, mappings, and plugin-specific behavior should remain outside core.
 
+## Implementation status (2026-07-15)
+
+Recommended implementation steps **1** and **2** are complete in this repository:
+
+- [`extensions/ui-catalog/index.ts`](../extensions/ui-catalog/index.ts) exposes `/ui-wheel-list`, a disposable wheel-to-list experiment; its selection behavior has unit coverage.
+- [`extensions/input-mapper/index.ts`](../extensions/input-mapper/index.ts) supplies the extension-only mapper MVP: SGR parsing, one-report-to-one-key mapping, tool lifecycle activation, direct mouse ownership through a persistent zero-line widget, JSON configuration, diagnostics, and `/input-map off` cleanup.
+- Profiles are configuration-owned, not built in. The Ask profile is installed for the playground in [`../ui-playground/.pi/input-mapper.json`](../ui-playground/.pi/input-mapper.json), with the same reusable sample at [`input-mapper.ask-user-question.example.json`](input-mapper.ask-user-question.example.json).
+
+This means the implementation work for those two recommended steps is complete; it does **not** claim that every Phase 1 exit criterion is complete. In particular, the independent-plugin validation in recommended step 3, broader Ask scenario testing, and cross-transport/manual compatibility coverage remain outstanding.
+
 ## Executive summary
 
 Pi 0.80.7 already preserves complete SGR mouse reports and exposes a raw terminal input transformer to extensions. A mapper extension can therefore convert a Termux wheel report into Up/Down, or a tap into Enter, before the focused overlay receives the input. `ask_user_question` already understands those keys.
@@ -315,6 +325,7 @@ Completed experimentally:
 - Exact text-cell hit testing works.
 - A tap can toggle local folded/expanded state.
 - Pi's input buffer preserves complete reports.
+- `/ui-wheel-list` maps SGR wheel reports to ordinary list Up/Down navigation.
 
 ### Work
 
@@ -326,17 +337,16 @@ Completed experimentally:
 
 ### Phase 0 configuration
 
-There is no mapper configuration yet. The project-local playground enables only the disposable catalog extension:
+The playground now loads the disposable catalog and mapper extensions. Its Ask profile lives separately in `.pi/input-mapper.json`; Phase 0 itself still uses `/ui-wheel-list` only to prove raw transport and keyboard-list behavior.
 
 ```json
 {
   "extensions": [
-    "../../extensions/ui-catalog"
+    "../../extensions/ui-catalog",
+    "../../extensions/input-mapper"
   ]
 }
 ```
-
-This phase deliberately proves transport and exact targets before introducing a profile language.
 
 ### Exit criteria
 
@@ -348,6 +358,8 @@ This phase deliberately proves transport and exact targets before introducing a 
 ## Phase 1 — Mapper MVP with zero Pi core changes
 
 ### Scope
+
+**Implementation status:** complete for recommended step 2. The MVP is in `extensions/input-mapper/` with helpers/tests under `src/input-mapper/` and `test/input-mapper/`. Its profile data is declarative JSON; no Ask-specific profile remains hardcoded.
 
 - One global input broker.
 - Direct `1000 + 1006` ownership through a persistent mapper widget.
@@ -1145,9 +1157,9 @@ Always-on tracking intercepts Termux native scrolling and selection. Use active 
 
 ## Recommended implementation order
 
-1. Add wheel/list experiments to `ui-playground` and validate directly in Termux.
-2. Implement mapper MVP with tool lifecycle, direct mouse ownership, config, diagnostics, and Ask profile.
-3. Validate a second independent keyboard-driven plugin using only configuration.
+1. **Complete** — Add wheel/list experiments to `ui-playground` and validate directly in Termux.
+2. **Complete** — Implement mapper MVP with tool lifecycle, direct mouse ownership, config, diagnostics, and Ask profile.
+3. **Next** — Validate a second independent keyboard-driven plugin using only configuration.
 4. Add agent `inspect/propose/write/test` workflow and profile confidence output.
 5. Define the mapper SDK and paired surface lifecycle contract; integrate Ask first.
 6. Upstream or prototype core change 1: mouse-reporting lease; migrate mapper ownership.

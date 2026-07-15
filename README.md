@@ -7,6 +7,10 @@ Local repo for pi/agent tooling and reusable agent guidance.
 - Asynchronous Herdr jobs extension and reusable agent guidance for Pi agents running inside Herdr.
 - An extension-first mobile terminal input mapper and incremental Pi interaction roadmap.
 
+## Mobile mapper progress
+
+Recommended implementation steps 1–2 are complete: the disposable wheel/list experiment is available as `/ui-wheel-list`, and the extension-only mapper MVP is available as `/input-map`. The Ask profile is configured by [`ui-playground/.pi/input-mapper.json`](ui-playground/.pi/input-mapper.json), with a reusable sample in [`docs/input-mapper.ask-user-question.example.json`](docs/input-mapper.ask-user-question.example.json). Step 3—validating a second independent plugin—remains next.
+
 ## Includes
 
 - [`agent-includes/herdr.md`](agent-includes/herdr.md) — short high-level guidance for `AGENTS.md`.
