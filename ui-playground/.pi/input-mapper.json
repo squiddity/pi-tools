@@ -19,6 +19,15 @@
         { "report": "wheel-down", "send": "down" },
         { "report": "left-release", "send": "enter" }
       ]
+    },
+    "herdr-jobs-status": {
+      "mouse": {
+        "protocol": "sgr",
+        "tracking": "buttons"
+      },
+      "mappings": [
+        { "report": "left-release", "send": "f8" }
+      ]
     }
   }
 }

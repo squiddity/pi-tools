@@ -18,6 +18,7 @@ test("a configured Ask profile maps one report to one existing keyboard input", 
   assert.equal(keyBytes("up"), "\x1b[A");
   assert.equal(keyBytes("down"), "\x1b[B");
   assert.equal(keyBytes("enter"), "\r");
+  assert.equal(keyBytes("f8"), "\x1b[19~");
 });
 
 test("only supported reports are named", () => {

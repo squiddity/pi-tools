@@ -12,7 +12,7 @@ Existing small standalone extensions may remain as direct files.
 
 [`input-mapper/index.ts`](input-mapper/index.ts) registers `/input-map`, an extension-only SGR mouse-to-key mapper. Profiles are declarative configuration only; [`../docs/input-mapper.ask-user-question.example.json`](../docs/input-mapper.ask-user-question.example.json) supplies the conservative Ask example, which maps Termux wheel reports to Up/Down and a same-cell press/release tap to Enter on the currently focused row. The mapper owns mouse reporting only for an active profile and `/input-map off` immediately restores normal terminal behavior.
 
-Configuration is loaded from `~/.pi/agent/input-mapper.json`, then trusted-project `.pi/input-mapper.json`; project profile fields override user fields. The initial schema accepts only version 1, profiles, tool activation, SGR/button mouse settings, gesture limits, and one-report-to-one-key mappings. Use the [UI playground](../ui-playground/) to test it before installing globally.
+Configuration is loaded from `~/.pi/agent/input-mapper.json`, then trusted-project `.pi/input-mapper.json`; project profile fields override user fields. The initial schema accepts only version 1, profiles, tool activation, SGR/button mouse settings, gesture limits, and one-report-to-one-key mappings. Function keys `f1`–`f12` are available for mapping extension shortcuts. [`../docs/input-mapper.herdr-jobs.example.json`](../docs/input-mapper.herdr-jobs.example.json) maps a tap to the Herdr jobs panel’s F8 toggle. Use the [UI playground](../ui-playground/) to test it before installing globally.
 
 ## UI catalog (experimental)
 

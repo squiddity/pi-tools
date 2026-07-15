@@ -9,6 +9,7 @@ export interface HerdrJobsRuntime {
   pi?: ExtensionAPI;
   latestCtx?: ExtensionContext;
   widgetInterval?: ReturnType<typeof setInterval>;
+  widgetExpanded?: boolean;
   sessionId?: string;
   deliveryLocks: Map<string, Promise<void>>;
 }
@@ -22,6 +23,7 @@ export function getRuntime(): HerdrJobsRuntime {
   // by newer extension versions before a preserved watcher can use them.
   if (!holder[RUNTIME_KEY].jobs) holder[RUNTIME_KEY].jobs = new Map();
   if (!holder[RUNTIME_KEY].deliveryLocks) holder[RUNTIME_KEY].deliveryLocks = new Map();
+  if (holder[RUNTIME_KEY].widgetExpanded === undefined) holder[RUNTIME_KEY].widgetExpanded = true;
   return holder[RUNTIME_KEY] as HerdrJobsRuntime;
 }
 

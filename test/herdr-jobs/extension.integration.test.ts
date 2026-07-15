@@ -16,6 +16,7 @@ test("extension start returns before a Herdr service completes and delivers read
     registerTool(tool: { name: string }) { tools.set(tool.name, tool); },
     on(name: string, handler: unknown) { handlers.set(name, handler); },
     registerMessageRenderer() {},
+    registerShortcut() {},
     sendMessage(message: { customType: string; content: string; details?: unknown }) { messages.push(message); },
   } as unknown as ExtensionAPI;
   const ctx = {
@@ -63,6 +64,7 @@ test("extension retains a successful cleanup-never job for herdr_job_close", { s
     registerTool(tool: { name: string }) { tools.set(tool.name, tool); },
     on(name: string, handler: unknown) { handlers.set(name, handler); },
     registerMessageRenderer() {},
+    registerShortcut() {},
     sendMessage(message: { customType: string; details?: { jobId?: string } }) { messages.push(message); },
   } as unknown as ExtensionAPI;
   const ctx = {

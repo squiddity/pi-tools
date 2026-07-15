@@ -21,6 +21,8 @@ Tap/click **`▶ UI catalog`** to fold or expand the panel. Enter and Space prov
 
 Run `/ui-wheel-list` to validate the first roadmap step: Termux wheel reports move a small list exactly like Up/Down. The input-mapper MVP is also loaded. Its Ask profile is declarative project configuration in [`.pi/input-mapper.json`](.pi/input-mapper.json), so it automatically arms while `ask_user_question` runs. Use `/input-map status`, `/input-map on ask-user-question`, `/input-map off`, and `/input-map diagnose on` to control or inspect it.
 
+The playground also loads `herdr-jobs`. With an active Herdr job, press **F8** to collapse/expand its status panel. To test the configuration-only second profile, run `/input-map on herdr-jobs-status`; a same-cell left press/release then emits F8. This initial profile maps any tap while enabled, not a panel-local hit target; run `/input-map off` when finished.
+
 ## Principles
 
 - **Disposable and isolated.** Keep incomplete interaction experiments in this playground, rather than loading them into every Pi session.

@@ -3,7 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { ConfigSource, InputKey, InputMapperConfig, InputMapping, InputProfile, MouseReport, ResolvedProfile } from "./types.ts";
 
-const VALID_KEYS = new Set<InputKey>(["up", "down", "enter", "space", "escape"]);
+const VALID_KEYS = new Set<InputKey>(["up", "down", "enter", "space", "escape", "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12"]);
 const VALID_REPORTS = new Set<MouseReport>(["wheel-up", "wheel-down", "left-release", "right-release"]);
 
 function object(value: unknown, name: string): Record<string, unknown> {

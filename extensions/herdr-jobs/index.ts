@@ -2,7 +2,7 @@ import { stat } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { StringEnum } from "@earendil-works/pi-ai";
-import { Box, Text, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { Box, Key, Text, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import { createJobId, ensureJobDirectory, getArtifactRoot, getJobPaths, listMetadata, readLogTail, readResult, writeAtomicJson } from "../../src/herdr-jobs/artifacts.ts";
 import { formatElapsed, formatFailureMessage, formatReadyMessage, formatReadyTimeoutMessage, formatResultMessage, jobSummary } from "../../src/herdr-jobs/format.ts";
@@ -92,18 +92,30 @@ function updateWidget(): void {
       const ready = jobs.filter((job) => job.lifecycle.readiness.kind === "ready").length;
       const info = `${active} active${ready ? ` · ${ready} ready` : ""}`;
       const border = (text: string) => theme.fg("accent", text);
-      const lines = [panelTop("herdr jobs", info, width, border)];
-      for (const job of jobs) {
-        const projection = projectLifecycle(job.lifecycle, now);
-        const color = projection === "failed" ? "error" : projection === "ready" || projection === "completed" ? "success" : projection === "stalled" ? "warning" : "muted";
-        const left = ` ${formatElapsed(job.metadata.startedAt, now)}  ${job.metadata.name} `;
-        const right = ` ${theme.fg(color, `${projection} · ${job.metadata.paneId}`)} `;
-        lines.push(panelLine(left, right, width, border));
+      const expanded = runtime.widgetExpanded ?? true;
+      const lines = [panelTop(`${expanded ? "▼" : "▶"} herdr jobs`, info, width, border)];
+      if (expanded) {
+        for (const job of jobs) {
+          const projection = projectLifecycle(job.lifecycle, now);
+          const color = projection === "failed" ? "error" : projection === "ready" || projection === "completed" ? "success" : projection === "stalled" ? "warning" : "muted";
+          const left = ` ${formatElapsed(job.metadata.startedAt, now)}  ${job.metadata.name} `;
+          const right = ` ${theme.fg(color, `${projection} · ${job.metadata.paneId}`)} `;
+          lines.push(panelLine(left, right, width, border));
+        }
+      } else {
+        lines.push(panelLine(` ${theme.fg("dim", "F8 expands jobs")}`, "", width, border));
       }
       lines.push(panelBottom(width, border));
       return lines;
     },
   }), { placement: "aboveEditor" });
+}
+
+function toggleWidget(): boolean {
+  if (![...runtime.jobs.values()].some((job) => isActive(job.lifecycle))) return false;
+  runtime.widgetExpanded = !(runtime.widgetExpanded ?? true);
+  updateWidget();
+  return true;
 }
 
 function startWidgetRefresh(): void {
@@ -238,6 +250,13 @@ export default function herdrJobsExtension(pi: ExtensionAPI) {
     runtime.sessionId = ctx.sessionManager.getSessionId();
     updateWidget();
     await reattach(ctx);
+  });
+
+  pi.registerShortcut(Key.f8, {
+    description: "Expand or collapse Herdr jobs status",
+    handler(ctx) {
+      if (!toggleWidget()) ctx.ui.notify("No active Herdr jobs to show.");
+    },
   });
 
   pi.on("session_shutdown", async (event) => {

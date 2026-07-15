@@ -6,13 +6,16 @@ import herdrJobsExtension from "../../extensions/herdr-jobs/index.ts";
 test("result messages use a coloured box and hide log output until expanded", async () => {
   const renderers = new Map<string, any>();
   const tools = new Map<string, any>();
+  const shortcuts = new Map<string, any>();
   const pi = {
     on() {},
     registerTool(tool: { name: string }) { tools.set(tool.name, tool); },
     registerMessageRenderer(type: string, renderer: unknown) { renderers.set(type, renderer); },
+    registerShortcut(key: string, shortcut: unknown) { shortcuts.set(key, shortcut); },
   } as unknown as ExtensionAPI;
   herdrJobsExtension(pi);
 
+  assert.equal(shortcuts.get("f8")?.description, "Expand or collapse Herdr jobs status");
   const renderer = renderers.get("herdr_job_result");
   assert.ok(renderer);
   const theme = {

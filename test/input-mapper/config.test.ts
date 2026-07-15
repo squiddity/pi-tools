@@ -10,12 +10,12 @@ test("accepts declarative version-one profiles", () => {
         activate: { tool: "deployment_review" },
         mouse: { protocol: "sgr", tracking: "buttons" },
         gestures: { thresholdCells: 2, suppressTapAfterWheel: true },
-        mappings: [{ report: "wheel-down", send: "down" }, { report: "left-release", send: "enter" }],
+        mappings: [{ report: "wheel-down", send: "down" }, { report: "left-release", send: "f8" }],
       },
     },
   }), "test config");
   assert.equal(config.profiles.review.activate?.tool, "deployment_review");
-  assert.equal(config.profiles.review.mappings?.[1].send, "enter");
+  assert.equal(config.profiles.review.mappings?.[1].send, "f8");
 });
 
 test("rejects unknown fields and arbitrary key injection", () => {
