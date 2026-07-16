@@ -2,10 +2,11 @@ import { StringDecoder } from "node:string_decoder";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { writeAtomicJson } from "./artifacts.ts";
 import { createLifecycle, markRunning } from "./lifecycle.ts";
-import type { JobPaths, PersistedJobMetadata, RunningJob } from "./types.ts";
+import type { JobPaths, PersistedJobMetadata, RunningJob, RunningManagedAgent } from "./types.ts";
 
 export interface HerdrJobsRuntime {
   jobs: Map<string, RunningJob>;
+  managedAgents: Map<string, RunningManagedAgent>;
   pi?: ExtensionAPI;
   latestCtx?: ExtensionContext;
   widgetInterval?: ReturnType<typeof setInterval>;
@@ -18,10 +19,11 @@ const RUNTIME_KEY = Symbol.for("pi-tools/herdr-jobs/runtime");
 
 export function getRuntime(): HerdrJobsRuntime {
   const holder = globalThis as typeof globalThis & { [RUNTIME_KEY]?: Partial<HerdrJobsRuntime> };
-  if (!holder[RUNTIME_KEY]) holder[RUNTIME_KEY] = { jobs: new Map(), deliveryLocks: new Map() };
+  if (!holder[RUNTIME_KEY]) holder[RUNTIME_KEY] = { jobs: new Map(), managedAgents: new Map(), deliveryLocks: new Map() };
   // Runtime objects survive /reload under a global symbol. Add fields introduced
   // by newer extension versions before a preserved watcher can use them.
   if (!holder[RUNTIME_KEY].jobs) holder[RUNTIME_KEY].jobs = new Map();
+  if (!holder[RUNTIME_KEY].managedAgents) holder[RUNTIME_KEY].managedAgents = new Map();
   if (!holder[RUNTIME_KEY].deliveryLocks) holder[RUNTIME_KEY].deliveryLocks = new Map();
   if (holder[RUNTIME_KEY].widgetExpanded === undefined) holder[RUNTIME_KEY].widgetExpanded = true;
   return holder[RUNTIME_KEY] as HerdrJobsRuntime;

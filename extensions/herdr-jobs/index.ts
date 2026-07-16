@@ -1,19 +1,34 @@
 import { stat } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { StringEnum } from "@earendil-works/pi-ai";
 import { Box, Key, Text, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
-import { createJobId, ensureJobDirectory, getArtifactRoot, getJobPaths, listMetadata, readLogTail, readResult, writeAtomicJson } from "../../src/herdr-jobs/artifacts.ts";
+import { createJobId, ensureJobDirectory, getArtifactRoot, getJobPaths, getManagedAgentPaths, listMetadata, readLogTail, readResult, writeAtomicJson } from "../../src/herdr-jobs/artifacts.ts";
 import { formatElapsed, formatFailureMessage, formatReadyMessage, formatReadyTimeoutMessage, formatResultMessage, jobSummary } from "../../src/herdr-jobs/format.ts";
 import { ensureHerdrAvailable, herdr, shellReadyDelayMs } from "../../src/herdr-jobs/herdr.ts";
 import { isActive, markClosed, markInterruptRequested, markResult, projectLifecycle } from "../../src/herdr-jobs/lifecycle.ts";
 import { createRunningJob, getRuntime, hasSessionDelivery, persistJob, clearWidgetTimer, withDeliveryLock } from "../../src/herdr-jobs/runtime.ts";
+import { buildManagedAgentArgv, findLastAssistantText, resolveExtensionPaths, splitCommaList } from "../../src/herdr-jobs/managed-agent.ts";
+import { watchManagedAgent } from "../../src/herdr-jobs/managed-agent-watcher.ts";
 import { paneRunCommand, writeRunnerFiles } from "../../src/herdr-jobs/runner.ts";
-import type { CleanupPolicy, JobKind, PersistedJobMetadata, Placement, RunningJob, WatchEvent } from "../../src/herdr-jobs/types.ts";
+import type { AgentExtensionMode, AgentPlacement, CleanupPolicy, JobKind, ManagedAgentCompletion, ManagedAgentMetadata, PersistedJobMetadata, Placement, RunningJob, RunningManagedAgent, WatchEvent } from "../../src/herdr-jobs/types.ts";
 import { watchJob } from "../../src/herdr-jobs/watcher.ts";
 
 const runtime = getRuntime();
+const AGENT_START_SCHEMA = Type.Object({
+  name: Type.String({ description: "Short display name for the managed Pi agent." }),
+  task: Type.String({ description: "Initial task for the managed Pi agent." }),
+  cwd: Type.Optional(Type.String({ description: "Working directory; relative paths use the current Pi cwd." })),
+  extensionMode: Type.Optional(StringEnum(["normal", "explicit"] as const)),
+  extensions: Type.Optional(Type.String({ description: "Comma-separated extension entry paths. Relative paths use the managed agent cwd." })),
+  tools: Type.Optional(Type.String({ description: "Comma-separated Pi built-in or extension tool names to enable." })),
+  model: Type.Optional(Type.String({ description: "Optional exact provider/model id. Defaults to the invoking Pi model when available." })),
+  thinking: Type.Optional(StringEnum(["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const)),
+  placement: Type.Optional(StringEnum(["down", "right", "tab"] as const)),
+});
+
 const START_SCHEMA = Type.Object({
   name: Type.String({ description: "Short display name for the job." }),
   command: Type.String({ description: "Shell command to run in the herdr pane." }),
@@ -78,7 +93,10 @@ function updateWidget(): void {
   const ctx = runtime.latestCtx;
   if (!ctx?.hasUI) return;
   const activeJobs = [...runtime.jobs.values()].filter((job) => isActive(job.lifecycle));
-  if (activeJobs.length === 0) {
+  const activeAgents = [...runtime.managedAgents.values()].filter((agent) =>
+    agent.status !== "completed" && agent.status !== "failed" && agent.status !== "closed",
+  );
+  if (activeJobs.length === 0 && activeAgents.length === 0) {
     ctx.ui.setWidget("herdr-jobs", undefined);
     clearWidgetTimer(runtime);
     return;
@@ -88,7 +106,10 @@ function updateWidget(): void {
     render(width: number) {
       const now = Date.now();
       const jobs = [...runtime.jobs.values()].filter((job) => isActive(job.lifecycle));
-      const active = jobs.length;
+      const agents = [...runtime.managedAgents.values()].filter((agent) =>
+        agent.status !== "completed" && agent.status !== "failed" && agent.status !== "closed",
+      );
+      const active = jobs.length + agents.length;
       const ready = jobs.filter((job) => job.lifecycle.readiness.kind === "ready").length;
       const info = `${active} active${ready ? ` · ${ready} ready` : ""}`;
       const border = (text: string) => theme.fg("accent", text);
@@ -102,6 +123,12 @@ function updateWidget(): void {
           const right = ` ${theme.fg(color, `${projection} · ${job.metadata.paneId}`)} `;
           lines.push(panelLine(left, right, width, border));
         }
+        for (const agent of agents) {
+          const color = agent.status === "blocked" ? "warning" : agent.status === "working" ? "accent" : "muted";
+          const left = ` ${formatElapsed(agent.metadata.startedAt, now)}  ${agent.metadata.name} `;
+          const right = ` ${theme.fg(color, `agent ${agent.status} · ${agent.metadata.paneId}`)} `;
+          lines.push(panelLine(left, right, width, border));
+        }
       } else {
         lines.push(panelLine(` ${theme.fg("dim", "F8 expands jobs")}`, "", width, border));
       }
@@ -112,7 +139,10 @@ function updateWidget(): void {
 }
 
 function toggleWidget(): boolean {
-  if (![...runtime.jobs.values()].some((job) => isActive(job.lifecycle))) return false;
+  if (
+    ![...runtime.jobs.values()].some((job) => isActive(job.lifecycle)) &&
+    ![...runtime.managedAgents.values()].some((agent) => agent.status !== "completed" && agent.status !== "failed" && agent.status !== "closed")
+  ) return false;
   runtime.widgetExpanded = !(runtime.widgetExpanded ?? true);
   updateWidget();
   return true;
@@ -207,6 +237,47 @@ function startWatcher(job: RunningJob): void {
     });
 }
 
+const MANAGED_AGENT_CHILD_EXTENSION = fileURLToPath(new URL("./managed-agent-child.ts", import.meta.url));
+
+function belongsToCurrentAgentSession(agent: RunningManagedAgent): boolean {
+  return runtime.sessionId === agent.metadata.parentSessionId;
+}
+
+async function deliverManagedAgentResult(agent: RunningManagedAgent, completion: ManagedAgentCompletion | undefined, error?: string): Promise<void> {
+  if (agent.delivered || !belongsToCurrentAgentSession(agent)) return;
+  await withDeliveryLock(runtime, `managed-agent:${agent.metadata.id}`, async () => {
+    if (agent.delivered || !belongsToCurrentAgentSession(agent)) return;
+    agent.delivered = true;
+    agent.status = error ? "failed" : "completed";
+    updateWidget();
+    const summary = completion?.summary || await findLastAssistantText(agent.paths.sessionFile) || (error ? "No completion summary was available." : "Managed agent completed without a summary.");
+    const content = error
+      ? `herdr managed agent "${agent.metadata.name}" failed after ${formatElapsed(agent.metadata.startedAt)}.\nReason: ${error}\nPane: ${agent.metadata.paneId}\nSession: ${agent.paths.sessionFile}`
+      : `herdr managed agent "${agent.metadata.name}" completed in ${formatElapsed(agent.metadata.startedAt, completion?.completedAt)}.\nPane: ${agent.metadata.paneId}\nSession: ${agent.paths.sessionFile}\n\n${summary}`;
+    if (!runtime.pi) return;
+    runtime.pi.sendMessage({
+      customType: "herdr_agent_result",
+      content,
+      display: true,
+      details: { agentId: agent.metadata.id, event: "result", name: agent.metadata.name, paneId: agent.metadata.paneId, terminalId: agent.metadata.terminalId, sessionFile: agent.paths.sessionFile, ...(error ? { error } : {}) },
+    }, { triggerTurn: true, deliverAs: "steer" });
+  });
+}
+
+function startManagedAgentWatcher(agent: RunningManagedAgent): void {
+  if (agent.watcherStarted) return;
+  agent.watcherStarted = true;
+  const controller = new AbortController();
+  agent.abortController = controller;
+  startWidgetRefresh();
+  void watchManagedAgent(agent, controller.signal, herdr, updateWidget)
+    .then((completion) => deliverManagedAgentResult(agent, completion))
+    .catch((error: unknown) => {
+      if (controller.signal.aborted) return;
+      return deliverManagedAgentResult(agent, undefined, error instanceof Error ? error.message : String(error));
+    });
+}
+
 function resolveJob(id?: string, name?: string): RunningJob {
   if (id) {
     const job = runtime.jobs.get(id);
@@ -274,7 +345,9 @@ export default function herdrJobsExtension(pi: ExtensionAPI) {
     runtime.latestCtx = undefined;
     runtime.pi = undefined;
     for (const job of runtime.jobs.values()) job.abortController?.abort();
+    for (const agent of runtime.managedAgents.values()) agent.abortController?.abort();
     runtime.jobs.clear();
+    runtime.managedAgents.clear();
   });
 
   for (const type of ["herdr_job_ready", "herdr_job_result", "herdr_job_status"] as const) {
@@ -304,6 +377,99 @@ export default function herdrJobsExtension(pi: ExtensionAPI) {
       return box;
     });
   }
+
+  pi.registerMessageRenderer("herdr_agent_result", (message, options, theme) => {
+    const details = message.details as { error?: unknown } | undefined;
+    const failed = typeof details?.error === "string";
+    const content = typeof message.content === "string" ? message.content : "herdr managed agent event";
+    const box = new Box(1, 1, (text) => theme.bg(failed ? "toolErrorBg" : "toolSuccessBg", text));
+    box.addChild(new Text(`${theme.fg(failed ? "error" : "success", theme.bold(`[herdr managed agent ${failed ? "failed" : "complete"}]`))}\n${theme.fg("customMessageText", content)}${options.expanded && message.details ? `\n${theme.fg("dim", JSON.stringify(message.details, null, 2))}` : ""}`, 0, 0));
+    return box;
+  });
+
+  pi.registerTool({
+    name: "herdr_agent_start",
+    label: "herdr agent start",
+    description: "Start a managed Pi agent in a dedicated herdr pane with caller-selected extensions and active tools. Use it for long-running orchestrators, experimental tools, isolated agent environments, or agents needing direct TTY interaction. The child must call herdr_agent_done when it has processed all required descendant results. For ordinary shared-environment delegation, prefer subagent; for non-agent commands, prefer herdr_job_start.",
+    promptSnippet: "Start an isolated managed Pi agent in herdr with custom extensions/tools and explicit completion.",
+    promptGuidelines: ["Use herdr_agent_start for an isolated Pi orchestrator requiring custom tools or extension loading. Use subagent for ordinary integrated delegation, and herdr_job_start for non-agent commands."],
+    parameters: AGENT_START_SCHEMA,
+    renderCall(_args, theme) {
+      return new Text(theme.fg("toolTitle", theme.bold("herdr agent start")), 0, 0);
+    },
+    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+      const name = params.name.trim();
+      const task = params.task.trim();
+      if (!name || name.length > 80) throw new Error("managed agent name must contain 1–80 characters.");
+      if (!task) throw new Error("managed agent task must not be empty.");
+      await ensureHerdrAvailable();
+      const cwd = await validatedCwd(params.cwd, ctx);
+      const extensionMode: AgentExtensionMode = params.extensionMode ?? "normal";
+      const extensions = resolveExtensionPaths(params.extensions, cwd);
+      for (const extension of extensions) {
+        try { await stat(extension); } catch { throw new Error(`Managed agent extension was not found: ${extension}`); }
+      }
+      const tools = splitCommaList(params.tools);
+      const id = createJobId();
+      const root = ctx.sessionManager.getSessionFile()
+        ? getArtifactRoot(ctx.sessionManager.getSessionDir(), ctx.sessionManager.getSessionId())
+        : getArtifactRoot(undefined, undefined);
+      const paths = getManagedAgentPaths(root, id);
+      await ensureJobDirectory(paths);
+      const parentModel = ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : undefined;
+      const model = params.model ?? parentModel;
+      const thinking = params.thinking ?? pi.getThinkingLevel();
+      const argv = buildManagedAgentArgv({
+        sessionFile: paths.sessionFile,
+        childExtension: MANAGED_AGENT_CHILD_EXTENSION,
+        task,
+        extensionMode,
+        extensions,
+        ...(tools.length ? { tools } : {}),
+        ...(model ? { model } : {}),
+        ...(thinking ? { thinking } : {}),
+      });
+      const launched = await herdr.startAgent({
+        name,
+        cwd,
+        placement: (params.placement ?? "tab") as AgentPlacement,
+        env: {
+          PI_HERDR_MANAGED_AGENT_ID: id,
+          PI_HERDR_MANAGED_AGENT_COMPLETION_FILE: paths.completionFile,
+        },
+        argv,
+      });
+      const metadata: ManagedAgentMetadata = {
+        version: 1,
+        id,
+        parentSessionId: ctx.sessionManager.getSessionId(),
+        name,
+        task,
+        cwd,
+        paneId: launched.paneId,
+        terminalId: launched.terminalId,
+        extensionMode,
+        extensions,
+        ...(tools.length ? { tools } : {}),
+        sessionFile: paths.sessionFile,
+        startedAt: Date.now(),
+      };
+      await writeAtomicJson(paths.metadataFile, metadata);
+      const agent: RunningManagedAgent = { metadata, paths, status: "starting" };
+      runtime.managedAgents.set(id, agent);
+      startManagedAgentWatcher(agent);
+      return textResult(`herdr managed agent "${name}" started in pane ${launched.paneId}. It will report completion after it calls herdr_agent_done.`, {
+        agentId: id,
+        paneId: launched.paneId,
+        terminalId: launched.terminalId,
+        sessionFile: paths.sessionFile,
+        extensionMode,
+        extensions,
+        tools,
+        status: "started",
+      });
+    },
+  });
 
   pi.registerTool({
     name: "herdr_job_start",

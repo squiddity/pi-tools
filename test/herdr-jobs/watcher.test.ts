@@ -13,6 +13,7 @@ function fakeOperations(): HerdrOperations {
   return {
     createPane: async () => "w:p2", renamePane: async () => {}, runPane: async () => {},
     inspectPane: async () => ({ kind: "present" }), readPane: async () => "", interruptPane: async () => {}, closePane: async () => {},
+    startAgent: async () => ({ paneId: "w:p3", terminalId: "term_1" }), inspectAgent: async () => ({ kind: "present", status: "idle" }),
   };
 }
 

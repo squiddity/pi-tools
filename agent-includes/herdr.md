@@ -6,7 +6,8 @@ High-level rules:
 
 - When the `herdr_job_*` tools are available, prefer `herdr_job_start` for ordinary long-running tests, builds, servers, watchers, and tails. It returns immediately; readiness and completion arrive automatically as steer messages.
 - After `herdr_job_start`, do **not** poll with the parent `bash` tool, `herdr wait`, sleeps, repeated log reads, or loops. Use `herdr_job_read` only for an explicit inspection requested by the user or needed to diagnose a problem.
-- Use `subagent` for coding-agent sessions and `herdr_job_start` for ordinary shell commands. If the async job extension is unavailable, direct pane commands and a genuinely short synchronous `herdr wait` remain valid fallbacks.
+- Use `subagent` for ordinary coding delegation in the shared configured environment, `herdr_agent_start` for a long-running isolated Pi orchestrator with caller-selected extensions/tools, and `herdr_job_start` for ordinary shell commands. If the async job extension is unavailable, direct pane commands and a genuinely short synchronous `herdr wait` remain valid fallbacks.
+- A managed agent started with `herdr_agent_start` is not done merely because it is idle: it may be waiting for nested subagent results. It must call `herdr_agent_done` only after processing all required descendant results. Its completion is delivered automatically; do not poll it from the parent.
 - Treat Herdr panes as real terminals owned by the Herdr server; they persist if the UI detaches.
 - Do not block the primary agent pane with long-running servers, watchers, or slow test loops when a Herdr side pane would be clearer.
 - Prefer a new Herdr tab for long-running jobs so the primary agent pane stays uncluttered. Use a split only when simultaneous side-by-side or stacked visibility is specifically useful.
