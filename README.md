@@ -15,6 +15,7 @@ Recommended implementation steps 1–3 are complete: the disposable wheel/list e
 
 - [`agent-includes/herdr.md`](agent-includes/herdr.md) — short high-level guidance for `AGENTS.md`.
 - [`docs/herdr-panes.md`](docs/herdr-panes.md) — deeper guide to opening, monitoring, and closing Herdr panes for long-running jobs.
+- [`docs/herdr-development.md`](docs/herdr-development.md) — local Herdr fork location, toolchain, validation, source areas, and Pi playground workflow.
 - [`docs/mobile-input-mapper-roadmap.md`](docs/mobile-input-mapper-roadmap.md) — research, architecture, configuration examples, and phased roadmap for mobile Termux input and eventual core UI actions.
 
 ## Herdr jobs extension
