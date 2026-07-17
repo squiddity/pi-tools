@@ -7,6 +7,8 @@ export type JobKind = "finite" | "service";
 export type Placement = "down" | "right" | "tab";
 export type DeliveryState = "pending" | "delivered" | "suppressed";
 export type CleanupPolicy = "on_success" | "always" | "never";
+export type PaneDisposition = "open" | "retained" | "closed" | "missing" | "closing" | "unknown";
+export type TrackingDisposition = "active" | "retained" | "removed";
 export type AgentExtensionMode = "normal" | "explicit";
 export type AgentPlacement = "down" | "right" | "tab";
 

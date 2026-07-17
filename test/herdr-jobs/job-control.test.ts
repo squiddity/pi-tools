@@ -5,6 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { ensureJobDirectory, getJobPaths } from "../../src/herdr-jobs/artifacts.ts";
 import { closeTrackedJob } from "../../src/herdr-jobs/job-control.ts";
+import { formatFailureMessage } from "../../src/herdr-jobs/format.ts";
 import { createRunningJob } from "../../src/herdr-jobs/runtime.ts";
 import type { HerdrOperations, PersistedJobMetadata } from "../../src/herdr-jobs/types.ts";
 
@@ -27,4 +28,7 @@ test("closeTrackedJob forgets an externally removed pane", async () => {
   assert.deepEqual(result, { paneAlreadyMissing: true });
   assert.equal(job.lifecycle.process.kind, "closed");
   assert.equal(job.lifecycle.delivery, "suppressed");
+  const message = await formatFailureMessage(job, "pane disappeared", { pane: "missing", tracking: "retained" });
+  assert.match(message, /Pane: pane \(missing\)/);
+  assert.match(message, /use herdr_job_close to forget/);
 });

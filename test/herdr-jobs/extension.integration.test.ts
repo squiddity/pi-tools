@@ -51,7 +51,9 @@ test("extension start returns before a Herdr service completes and delivers read
   }
   assert.equal(messages.filter((message) => message.customType === "herdr_job_ready").length, 1);
   assert.equal(messages.filter((message) => message.customType === "herdr_job_result").length, 1);
-  assert.match(messages.find((message) => message.customType === "herdr_job_result")?.content ?? "", /Exit code: 0/);
+  const completion = messages.find((message) => message.customType === "herdr_job_result");
+  assert.match(completion?.content ?? "", /Exit code: 0/);
+  assert.match(completion?.content ?? "", /Pane: .*\(closed automatically\)/);
   await handlers.get("session_shutdown")({ reason: "quit" }, ctx);
 });
 

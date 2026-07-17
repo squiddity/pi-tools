@@ -6,7 +6,7 @@ import { StringEnum } from "@earendil-works/pi-ai";
 import { Box, Key, Text, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import { createJobId, ensureJobDirectory, getArtifactRoot, getJobPaths, getManagedAgentPaths, listMetadata, readLogTail, readResult, writeAtomicJson } from "../../src/herdr-jobs/artifacts.ts";
-import { formatElapsed, formatFailureMessage, formatReadyMessage, formatReadyTimeoutMessage, formatResultMessage, jobSummary } from "../../src/herdr-jobs/format.ts";
+import { formatElapsed, formatFailureMessage, formatReadyMessage, formatReadyTimeoutMessage, formatResultMessage, jobSummary, type DeliveryDisposition } from "../../src/herdr-jobs/format.ts";
 import { ensureHerdrAvailable, herdr, shellReadyDelayMs } from "../../src/herdr-jobs/herdr.ts";
 import { isActive, markInterruptRequested, markResult, projectLifecycle } from "../../src/herdr-jobs/lifecycle.ts";
 import { createRunningJob, getRuntime, hasSessionDelivery, persistJob, clearWidgetTimer, withDeliveryLock } from "../../src/herdr-jobs/runtime.ts";
@@ -15,7 +15,7 @@ import { watchManagedAgent } from "../../src/herdr-jobs/managed-agent-watcher.ts
 import { closeTrackedJob } from "../../src/herdr-jobs/job-control.ts";
 import { getTrackedPanelEntries } from "../../src/herdr-jobs/tracked.ts";
 import { paneRunCommand, writeRunnerFiles } from "../../src/herdr-jobs/runner.ts";
-import type { AgentExtensionMode, AgentPlacement, CleanupPolicy, JobKind, ManagedAgentCompletion, ManagedAgentMetadata, PersistedJobMetadata, Placement, RunningJob, RunningManagedAgent, WatchEvent } from "../../src/herdr-jobs/types.ts";
+import type { AgentExtensionMode, AgentPlacement, CleanupPolicy, JobKind, ManagedAgentCompletion, ManagedAgentMetadata, PaneDisposition, PersistedJobMetadata, Placement, RunningJob, RunningManagedAgent, WatchEvent } from "../../src/herdr-jobs/types.ts";
 import { watchJob } from "../../src/herdr-jobs/watcher.ts";
 
 const runtime = getRuntime();
@@ -75,6 +75,25 @@ function assertUniqueTrackedName(name: string): void {
 
 function shouldCloseAfterTerminal(job: RunningJob, exitCode: number | undefined): boolean {
   return job.metadata.cleanup === "always" || (job.metadata.cleanup === "on_success" && exitCode === 0);
+}
+
+async function settleTerminalJob(job: RunningJob, exitCode: number | undefined): Promise<DeliveryDisposition> {
+  // An externally deleted pane remains listed until the caller explicitly
+  // forgets it, so the parent model has a visible, actionable record.
+  if (job.lifecycle.paneMissingAt) return { pane: "missing", tracking: "retained" };
+  if (!shouldCloseAfterTerminal(job, exitCode)) return { pane: "retained", tracking: "retained" };
+  try {
+    await herdr.closePane(job.metadata.paneId);
+    runtime.jobs.delete(job.metadata.id);
+    return { pane: "closed", tracking: "removed" };
+  } catch {
+    const inspection = await herdr.inspectPane(job.metadata.paneId);
+    if (inspection.kind === "missing") {
+      runtime.jobs.delete(job.metadata.id);
+      return { pane: "missing", tracking: "removed" };
+    }
+    return { pane: "retained", tracking: "retained" };
+  }
 }
 
 function panelTop(title: string, info: string, width: number, border: (text: string) => string): string {
@@ -182,7 +201,7 @@ async function deliverEvent(job: RunningJob, event: WatchEvent): Promise<void> {
       job.lifecycle.readyDelivered = true;
       await persistJob(job);
       if (!belongsToCurrentSession(job) || !runtime.pi || !runtime.latestCtx) return;
-      runtime.pi.sendMessage({ customType: "herdr_job_ready", content: formatReadyMessage(job, event.matchedText), display: true, details: { jobId: job.metadata.id, event: "ready", paneId: job.metadata.paneId } }, { triggerTurn: true, deliverAs: "steer" });
+      runtime.pi.sendMessage({ customType: "herdr_job_ready", content: formatReadyMessage(job, event.matchedText), display: true, details: { jobId: job.metadata.id, event: "ready", paneId: job.metadata.paneId, paneDisposition: "open", trackingDisposition: "active" } }, { triggerTurn: true, deliverAs: "steer" });
       updateWidget();
       return;
     }
@@ -192,7 +211,7 @@ async function deliverEvent(job: RunningJob, event: WatchEvent): Promise<void> {
       job.lifecycle.timeoutDelivered = true;
       await persistJob(job);
       if (!belongsToCurrentSession(job) || !runtime.pi || !runtime.latestCtx) return;
-      runtime.pi.sendMessage({ customType: "herdr_job_status", content: formatReadyTimeoutMessage(job), display: true, details: { jobId: job.metadata.id, event: "status", paneId: job.metadata.paneId, status: "ready_timeout" } }, { triggerTurn: true, deliverAs: "steer" });
+      runtime.pi.sendMessage({ customType: "herdr_job_status", content: formatReadyTimeoutMessage(job), display: true, details: { jobId: job.metadata.id, event: "status", paneId: job.metadata.paneId, status: "ready_timeout", paneDisposition: "open", trackingDisposition: "active" } }, { triggerTurn: true, deliverAs: "steer" });
       updateWidget();
       return;
     }
@@ -202,32 +221,26 @@ async function deliverEvent(job: RunningJob, event: WatchEvent): Promise<void> {
       job.lifecycle.delivery = "delivered";
       await persistJob(job);
       if (!belongsToCurrentSession(job)) return;
-      if (shouldCloseAfterTerminal(job, exitCode)) {
-        try { await herdr.closePane(job.metadata.paneId); } catch { /* terminal artifacts remain available */ }
-        runtime.jobs.delete(job.metadata.id);
-      }
+      await settleTerminalJob(job, exitCode);
       updateWidget();
       return;
     }
 
     const failure = event.kind === "failure" ? event.error : undefined;
-    const content = exitCode === undefined
-      ? await formatFailureMessage(job, failure ?? "herdr job watcher failed.")
-      : await formatResultMessage(job, exitCode);
     if (!belongsToCurrentSession(job)) return;
     job.lifecycle.delivery = "delivered";
     await persistJob(job);
     if (!belongsToCurrentSession(job) || !runtime.pi || !runtime.latestCtx) return;
-    if (shouldCloseAfterTerminal(job, exitCode)) {
-      try { await herdr.closePane(job.metadata.paneId); } catch { /* result artifact has already been preserved */ }
-      runtime.jobs.delete(job.metadata.id);
-    }
+    const disposition = await settleTerminalJob(job, exitCode);
+    const content = exitCode === undefined
+      ? await formatFailureMessage(job, failure ?? "herdr job watcher failed.", disposition)
+      : await formatResultMessage(job, exitCode, disposition);
     updateWidget();
     runtime.pi.sendMessage({
       customType: "herdr_job_result",
       content,
       display: true,
-      details: { jobId: job.metadata.id, event: "result", paneId: job.metadata.paneId, ...(exitCode === undefined ? { error: failure } : { exitCode }) },
+      details: { jobId: job.metadata.id, event: "result", paneId: job.metadata.paneId, cleanup: job.metadata.cleanup, paneDisposition: disposition.pane, trackingDisposition: disposition.tracking, ...(exitCode === undefined ? { error: failure } : { exitCode }) },
     }, { triggerTurn: true, deliverAs: "steer" });
   });
 }
@@ -251,23 +264,32 @@ function belongsToCurrentAgentSession(agent: RunningManagedAgent): boolean {
   return runtime.sessionId === agent.metadata.parentSessionId;
 }
 
+async function managedAgentPaneDisposition(agent: RunningManagedAgent, completedNormally: boolean): Promise<PaneDisposition> {
+  if (completedNormally) return "closing";
+  const inspection = await herdr.inspectAgent(agent.metadata.terminalId);
+  if (inspection.kind === "missing") return "missing";
+  return "unknown";
+}
+
 async function deliverManagedAgentResult(agent: RunningManagedAgent, completion: ManagedAgentCompletion | undefined, error?: string): Promise<void> {
   if (agent.delivered || !belongsToCurrentAgentSession(agent)) return;
   await withDeliveryLock(runtime, `managed-agent:${agent.metadata.id}`, async () => {
     if (agent.delivered || !belongsToCurrentAgentSession(agent)) return;
     agent.delivered = true;
     agent.status = error ? "failed" : "completed";
-    updateWidget();
+    const paneDisposition = await managedAgentPaneDisposition(agent, !error);
     const summary = completion?.summary || await findLastAssistantText(agent.paths.sessionFile) || (error ? "No completion summary was available." : "Managed agent completed without a summary.");
     const content = error
-      ? `herdr managed agent "${agent.metadata.name}" failed after ${formatElapsed(agent.metadata.startedAt)}.\nReason: ${error}\nPane: ${agent.metadata.paneId}\nSession: ${agent.paths.sessionFile}`
-      : `herdr managed agent "${agent.metadata.name}" completed in ${formatElapsed(agent.metadata.startedAt, completion?.completedAt)}.\nPane: ${agent.metadata.paneId}\nSession: ${agent.paths.sessionFile}\n\n${summary}`;
+      ? `herdr managed agent "${agent.metadata.name}" failed after ${formatElapsed(agent.metadata.startedAt)}.\nReason: ${error}\nPane: ${agent.metadata.paneId} (${paneDisposition})\nSession: ${agent.paths.sessionFile}`
+      : `herdr managed agent "${agent.metadata.name}" completed in ${formatElapsed(agent.metadata.startedAt, completion?.completedAt)}.\nPane: ${agent.metadata.paneId} (shutdown requested)\nSession: ${agent.paths.sessionFile}\n\n${summary}`;
+    runtime.managedAgents.delete(agent.metadata.id);
+    updateWidget();
     if (!runtime.pi) return;
     runtime.pi.sendMessage({
       customType: "herdr_agent_result",
       content,
       display: true,
-      details: { agentId: agent.metadata.id, event: "result", name: agent.metadata.name, paneId: agent.metadata.paneId, terminalId: agent.metadata.terminalId, sessionFile: agent.paths.sessionFile, ...(error ? { error } : {}) },
+      details: { agentId: agent.metadata.id, event: "result", name: agent.metadata.name, paneId: agent.metadata.paneId, terminalId: agent.metadata.terminalId, sessionFile: agent.paths.sessionFile, paneDisposition, trackingDisposition: "removed", ...(error ? { error } : {}) },
     }, { triggerTurn: true, deliverAs: "steer" });
   });
 }
@@ -475,6 +497,8 @@ export default function herdrJobsExtension(pi: ExtensionAPI) {
         extensionMode,
         extensions,
         tools,
+        paneDisposition: "open",
+        trackingDisposition: "active",
         status: "started",
       });
     },
@@ -530,7 +554,7 @@ export default function herdrJobsExtension(pi: ExtensionAPI) {
         const job = createRunningJob(metadata, paths);
         runtime.jobs.set(id, job);
         startWatcher(job);
-        return textResult(`herdr job "${name}" started in pane ${paneId}. Do not poll it; completion will be delivered automatically.`, { jobId: id, paneId, name, kind, cwd, artifactDir: paths.root, logFile: paths.logFile, cleanup, status: "started" });
+        return textResult(`herdr job "${name}" started in pane ${paneId}. Pane status: open. Do not poll it; completion will be delivered automatically.`, { jobId: id, paneId, name, kind, cwd, artifactDir: paths.root, logFile: paths.logFile, cleanup, paneDisposition: "open", trackingDisposition: "active", status: "started" });
       } catch (error) {
         // The start tool is already reporting this failure synchronously. Do not
         // leave a pending artifact that a future resume would misreport as a
@@ -558,7 +582,7 @@ export default function herdrJobsExtension(pi: ExtensionAPI) {
       job.lifecycle = markInterruptRequested(job.lifecycle, Date.now());
       await persistJob(job);
       updateWidget();
-      return textResult(`Interrupt requested for herdr job "${job.metadata.name}" (${job.metadata.id}).`, { jobId: job.metadata.id, status: "interrupt_requested" });
+      return textResult(`Interrupt requested for herdr job "${job.metadata.name}" (${job.metadata.id}). Pane status: open; tracking continues until terminal evidence arrives.`, { jobId: job.metadata.id, paneDisposition: "open", trackingDisposition: "active", status: "interrupt_requested" });
     },
   });
 
@@ -613,7 +637,7 @@ export default function herdrJobsExtension(pi: ExtensionAPI) {
       updateWidget();
       return textResult(paneAlreadyMissing
         ? `Forgot herdr job "${job.metadata.name}"; pane ${job.metadata.paneId} was already removed.`
-        : `Closed herdr job pane ${job.metadata.paneId}.`, { jobId: job.metadata.id, status: "closed", paneAlreadyMissing });
+        : `Closed herdr job pane ${job.metadata.paneId}.`, { jobId: job.metadata.id, status: "closed", paneAlreadyMissing, paneDisposition: paneAlreadyMissing ? "missing" : "closed", trackingDisposition: "removed" });
     },
   });
 }
