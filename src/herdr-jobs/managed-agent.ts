@@ -4,6 +4,12 @@ import type { AgentExtensionMode } from "./types.ts";
 
 export const MANAGED_AGENT_DONE_TOOL = "herdr_agent_done";
 
+export function findDuplicateTrackedName(name: string, jobNames: Iterable<string>, activeAgentNames: Iterable<string>): "job" | "managed_agent" | undefined {
+  for (const current of jobNames) if (current === name) return "job";
+  for (const current of activeAgentNames) if (current === name) return "managed_agent";
+  return undefined;
+}
+
 export function splitCommaList(value: string | undefined): string[] {
   return [...new Set((value ?? "").split(",").map((item) => item.trim()).filter(Boolean))];
 }

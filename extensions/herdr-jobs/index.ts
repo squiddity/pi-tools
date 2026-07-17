@@ -8,10 +8,12 @@ import { Type } from "typebox";
 import { createJobId, ensureJobDirectory, getArtifactRoot, getJobPaths, getManagedAgentPaths, listMetadata, readLogTail, readResult, writeAtomicJson } from "../../src/herdr-jobs/artifacts.ts";
 import { formatElapsed, formatFailureMessage, formatReadyMessage, formatReadyTimeoutMessage, formatResultMessage, jobSummary } from "../../src/herdr-jobs/format.ts";
 import { ensureHerdrAvailable, herdr, shellReadyDelayMs } from "../../src/herdr-jobs/herdr.ts";
-import { isActive, markClosed, markInterruptRequested, markResult, projectLifecycle } from "../../src/herdr-jobs/lifecycle.ts";
+import { isActive, markInterruptRequested, markResult, projectLifecycle } from "../../src/herdr-jobs/lifecycle.ts";
 import { createRunningJob, getRuntime, hasSessionDelivery, persistJob, clearWidgetTimer, withDeliveryLock } from "../../src/herdr-jobs/runtime.ts";
-import { buildManagedAgentArgv, findLastAssistantText, resolveExtensionPaths, splitCommaList } from "../../src/herdr-jobs/managed-agent.ts";
+import { buildManagedAgentArgv, findDuplicateTrackedName, findLastAssistantText, resolveExtensionPaths, splitCommaList } from "../../src/herdr-jobs/managed-agent.ts";
 import { watchManagedAgent } from "../../src/herdr-jobs/managed-agent-watcher.ts";
+import { closeTrackedJob } from "../../src/herdr-jobs/job-control.ts";
+import { getTrackedPanelEntries } from "../../src/herdr-jobs/tracked.ts";
 import { paneRunCommand, writeRunnerFiles } from "../../src/herdr-jobs/runner.ts";
 import type { AgentExtensionMode, AgentPlacement, CleanupPolicy, JobKind, ManagedAgentCompletion, ManagedAgentMetadata, PersistedJobMetadata, Placement, RunningJob, RunningManagedAgent, WatchEvent } from "../../src/herdr-jobs/types.ts";
 import { watchJob } from "../../src/herdr-jobs/watcher.ts";
@@ -59,6 +61,18 @@ function resolveCleanup(cleanup: CleanupPolicy | undefined, keepPane: boolean | 
   return "on_success";
 }
 
+function assertUniqueTrackedName(name: string): void {
+  const duplicate = findDuplicateTrackedName(
+    name,
+    [...runtime.jobs.values()].map((item) => item.metadata.name),
+    [...runtime.managedAgents.values()]
+      .filter((item) => item.status !== "completed" && item.status !== "failed" && item.status !== "closed")
+      .map((item) => item.metadata.name),
+  );
+  if (duplicate === "job") throw new Error(`A tracked herdr job named "${name}" already exists. Close it before reusing the name.`);
+  if (duplicate === "managed_agent") throw new Error(`A managed herdr agent named "${name}" is already active.`);
+}
+
 function shouldCloseAfterTerminal(job: RunningJob, exitCode: number | undefined): boolean {
   return job.metadata.cleanup === "always" || (job.metadata.cleanup === "on_success" && exitCode === 0);
 }
@@ -92,11 +106,8 @@ function panelBottom(width: number, border: (text: string) => string): string {
 function updateWidget(): void {
   const ctx = runtime.latestCtx;
   if (!ctx?.hasUI) return;
-  const activeJobs = [...runtime.jobs.values()].filter((job) => isActive(job.lifecycle));
-  const activeAgents = [...runtime.managedAgents.values()].filter((agent) =>
-    agent.status !== "completed" && agent.status !== "failed" && agent.status !== "closed",
-  );
-  if (activeJobs.length === 0 && activeAgents.length === 0) {
+  const entries = getTrackedPanelEntries(runtime.jobs.values(), runtime.managedAgents.values());
+  if (entries.length === 0) {
     ctx.ui.setWidget("herdr-jobs", undefined);
     clearWidgetTimer(runtime);
     return;
@@ -105,13 +116,13 @@ function updateWidget(): void {
     invalidate() {},
     render(width: number) {
       const now = Date.now();
-      const jobs = [...runtime.jobs.values()].filter((job) => isActive(job.lifecycle));
-      const agents = [...runtime.managedAgents.values()].filter((agent) =>
-        agent.status !== "completed" && agent.status !== "failed" && agent.status !== "closed",
-      );
-      const active = jobs.length + agents.length;
+      const entries = getTrackedPanelEntries(runtime.jobs.values(), runtime.managedAgents.values());
+      const jobs = entries.filter((entry) => entry.type === "job").map((entry) => entry.job);
+      const agents = entries.filter((entry) => entry.type === "managed_agent").map((entry) => entry.agent);
+      const active = jobs.filter((job) => isActive(job.lifecycle)).length + agents.length;
       const ready = jobs.filter((job) => job.lifecycle.readiness.kind === "ready").length;
-      const info = `${active} active${ready ? ` · ${ready} ready` : ""}`;
+      const retained = entries.length - active;
+      const info = `${active} active${ready ? ` · ${ready} ready` : ""}${retained ? ` · ${retained} retained` : ""}`;
       const border = (text: string) => theme.fg("accent", text);
       const expanded = runtime.widgetExpanded ?? true;
       const lines = [panelTop(`${expanded ? "▼" : "▶"} herdr jobs`, info, width, border)];
@@ -139,10 +150,7 @@ function updateWidget(): void {
 }
 
 function toggleWidget(): boolean {
-  if (
-    ![...runtime.jobs.values()].some((job) => isActive(job.lifecycle)) &&
-    ![...runtime.managedAgents.values()].some((agent) => agent.status !== "completed" && agent.status !== "failed" && agent.status !== "closed")
-  ) return false;
+  if (getTrackedPanelEntries(runtime.jobs.values(), runtime.managedAgents.values()).length === 0) return false;
   runtime.widgetExpanded = !(runtime.widgetExpanded ?? true);
   updateWidget();
   return true;
@@ -401,6 +409,7 @@ export default function herdrJobsExtension(pi: ExtensionAPI) {
       const name = params.name.trim();
       const task = params.task.trim();
       if (!name || name.length > 80) throw new Error("managed agent name must contain 1–80 characters.");
+      assertUniqueTrackedName(name);
       if (!task) throw new Error("managed agent task must not be empty.");
       await ensureHerdrAvailable();
       const cwd = await validatedCwd(params.cwd, ctx);
@@ -485,6 +494,7 @@ export default function herdrJobsExtension(pi: ExtensionAPI) {
       const name = params.name.trim();
       const command = params.command.trim();
       if (!name || name.length > 80) throw new Error("herdr job name must contain 1–80 characters.");
+      assertUniqueTrackedName(name);
       if (!command) throw new Error("herdr job command must not be empty.");
       if (params.readyTimeoutMs !== undefined && !params.readyPattern) throw new Error("readyTimeoutMs requires readyPattern.");
       const cleanup = resolveCleanup(params.cleanup, params.keepPane);
@@ -568,21 +578,29 @@ export default function herdrJobsExtension(pi: ExtensionAPI) {
 
   pi.registerTool({
     name: "herdr_jobs_list", label: "herdr jobs list",
-    description: "List currently tracked asynchronous herdr jobs. This is for explicit inspection, not polling.",
+    description: "List the same tracked jobs and active managed agents shown in the herdr jobs widget, including retained failures. This is for explicit inspection, not polling.",
     parameters: Type.Object({}),
     renderCall(_args, theme) {
       return new Text(theme.fg("toolTitle", theme.bold("herdr jobs list")), 0, 0);
     },
     async execute() {
-      const jobs = [...runtime.jobs.values()];
-      if (!jobs.length) return textResult("No tracked herdr jobs.", { jobs: [] });
-      return textResult(jobs.map((job) => `${job.metadata.id}  ${jobSummary(job)}`).join("\n"), { jobs: jobs.map((job) => ({ id: job.metadata.id, name: job.metadata.name, paneId: job.metadata.paneId, kind: job.metadata.kind, state: projectLifecycle(job.lifecycle, Date.now()), readiness: job.lifecycle.readiness.kind, logFile: job.paths.logFile, artifactDir: job.paths.root })) });
+      const entries = getTrackedPanelEntries(runtime.jobs.values(), runtime.managedAgents.values());
+      const jobs = entries.filter((entry) => entry.type === "job").map((entry) => entry.job);
+      const agents = entries.filter((entry) => entry.type === "managed_agent").map((entry) => entry.agent);
+      if (entries.length === 0) return textResult("No tracked herdr jobs or managed agents.", { jobs: [], agents: [] });
+      const jobDetails = jobs.map((job) => ({ id: job.metadata.id, name: job.metadata.name, paneId: job.metadata.paneId, kind: job.metadata.kind, state: projectLifecycle(job.lifecycle, Date.now()), readiness: job.lifecycle.readiness.kind, logFile: job.paths.logFile, artifactDir: job.paths.root }));
+      const agentDetails = agents.map((agent) => ({ id: agent.metadata.id, name: agent.metadata.name, paneId: agent.metadata.paneId, terminalId: agent.metadata.terminalId, kind: "managed_agent", state: agent.status, sessionFile: agent.paths.sessionFile }));
+      const lines = [
+        ...jobs.map((job) => `${job.metadata.id}  ${jobSummary(job)}`),
+        ...agents.map((agent) => `${agent.metadata.id}  ${formatElapsed(agent.metadata.startedAt)}  ${agent.metadata.name} — agent ${agent.status} · ${agent.metadata.paneId}`),
+      ];
+      return textResult(lines.join("\n"), { jobs: jobDetails, agents: agentDetails });
     },
   });
 
   pi.registerTool({
     name: "herdr_job_close", label: "herdr job close",
-    description: "Close a tracked herdr job pane. Active jobs require force=true; prefer herdr_job_interrupt first.",
+    description: "Close or forget a tracked herdr job pane. Active jobs require force=true; prefer herdr_job_interrupt first. If the pane was already removed, this succeeds by forgetting the retained job record.",
     parameters: Type.Object({ id: Type.String(), force: Type.Optional(Type.Boolean()) }),
     renderCall(_args, theme) {
       return new Text(theme.fg("toolTitle", theme.bold("herdr job close")), 0, 0);
@@ -590,13 +608,12 @@ export default function herdrJobsExtension(pi: ExtensionAPI) {
     async execute(_id, params) {
       const job = resolveJob(params.id);
       if (isActive(job.lifecycle) && !params.force) throw new Error("The herdr job is active. Interrupt it first, or pass force: true to close it intentionally.");
-      job.lifecycle = markClosed(job.lifecycle, Date.now());
-      await persistJob(job);
-      job.abortController?.abort();
-      await herdr.closePane(job.metadata.paneId);
+      const { paneAlreadyMissing } = await closeTrackedJob(job, herdr);
       runtime.jobs.delete(job.metadata.id);
       updateWidget();
-      return textResult(`Closed herdr job pane ${job.metadata.paneId}.`, { jobId: job.metadata.id, status: "closed" });
+      return textResult(paneAlreadyMissing
+        ? `Forgot herdr job "${job.metadata.name}"; pane ${job.metadata.paneId} was already removed.`
+        : `Closed herdr job pane ${job.metadata.paneId}.`, { jobId: job.metadata.id, status: "closed", paneAlreadyMissing });
     },
   });
 }

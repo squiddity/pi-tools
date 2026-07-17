@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { getManagedAgentPaths, parseManagedAgentCompletion, parseManagedAgentMetadata } from "../../src/herdr-jobs/artifacts.ts";
-import { buildManagedAgentArgv, findLastAssistantText, projectManagedAgentStatus, resolveExtensionPaths, splitCommaList } from "../../src/herdr-jobs/managed-agent.ts";
+import { buildManagedAgentArgv, findDuplicateTrackedName, findLastAssistantText, projectManagedAgentStatus, resolveExtensionPaths, splitCommaList } from "../../src/herdr-jobs/managed-agent.ts";
 
 test("builds an explicitly isolated Pi argv with a completion tool", () => {
   const argv = buildManagedAgentArgv({
@@ -25,6 +25,9 @@ test("builds an explicitly isolated Pi argv with a completion tool", () => {
 });
 
 test("normalizes tool lists, extension paths, and Herdr agent states", () => {
+  assert.equal(findDuplicateTrackedName("tests", ["tests"], []), "job");
+  assert.equal(findDuplicateTrackedName("agent", [], ["agent"]), "managed_agent");
+  assert.equal(findDuplicateTrackedName("free", ["tests"], ["agent"]), undefined);
   assert.deepEqual(splitCommaList(" read, bash,read ,"), ["read", "bash"]);
   assert.deepEqual(resolveExtensionPaths(".pi/extensions/a.ts, /tmp/b.ts", "/project"), ["/project/.pi/extensions/a.ts", "/tmp/b.ts"]);
   assert.equal(projectManagedAgentStatus("working"), "working");
