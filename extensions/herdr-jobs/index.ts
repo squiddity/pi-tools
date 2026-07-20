@@ -127,45 +127,60 @@ function updateWidget(): void {
   if (!ctx?.hasUI) return;
   const entries = getTrackedPanelEntries(runtime.jobs.values(), runtime.managedAgents.values());
   if (entries.length === 0) {
-    ctx.ui.setWidget("herdr-jobs", undefined);
+    if (runtime.widgetMounted) ctx.ui.setWidget("herdr-jobs", undefined);
+    runtime.widgetMounted = false;
+    runtime.widgetRequestRender = undefined;
     clearWidgetTimer(runtime);
     return;
   }
-  ctx.ui.setWidget("herdr-jobs", (_tui, theme) => ({
-    invalidate() {},
-    render(width: number) {
-      const now = Date.now();
-      const entries = getTrackedPanelEntries(runtime.jobs.values(), runtime.managedAgents.values());
-      const jobs = entries.filter((entry) => entry.type === "job").map((entry) => entry.job);
-      const agents = entries.filter((entry) => entry.type === "managed_agent").map((entry) => entry.agent);
-      const active = jobs.filter((job) => isActive(job.lifecycle)).length + agents.length;
-      const ready = jobs.filter((job) => job.lifecycle.readiness.kind === "ready").length;
-      const retained = entries.length - active;
-      const info = `${active} active${ready ? ` · ${ready} ready` : ""}${retained ? ` · ${retained} retained` : ""}`;
-      const border = (text: string) => theme.fg("accent", text);
-      const expanded = runtime.widgetExpanded ?? true;
-      const lines = [panelTop(`${expanded ? "▼" : "▶"} herdr jobs`, info, width, border)];
-      if (expanded) {
-        for (const job of jobs) {
-          const projection = projectLifecycle(job.lifecycle, now);
-          const color = projection === "failed" ? "error" : projection === "ready" || projection === "completed" ? "success" : projection === "stalled" ? "warning" : "muted";
-          const left = ` ${formatElapsed(job.metadata.startedAt, now)}  ${job.metadata.name} `;
-          const right = ` ${theme.fg(color, `${projection} · ${job.metadata.paneId}`)} `;
-          lines.push(panelLine(left, right, width, border));
+
+  // setWidget insertion order determines the relative order of widgets above
+  // the editor. Re-registering every second moves this panel around other
+  // extensions (notably pi-herdr-subagents), so mount once and only rerender.
+  if (runtime.widgetMounted) {
+    runtime.widgetRequestRender?.();
+    return;
+  }
+
+  ctx.ui.setWidget("herdr-jobs", (tui, theme) => {
+    runtime.widgetRequestRender = () => tui.requestRender();
+    return {
+      invalidate() {},
+      render(width: number) {
+        const now = Date.now();
+        const entries = getTrackedPanelEntries(runtime.jobs.values(), runtime.managedAgents.values());
+        const jobs = entries.filter((entry) => entry.type === "job").map((entry) => entry.job);
+        const agents = entries.filter((entry) => entry.type === "managed_agent").map((entry) => entry.agent);
+        const active = jobs.filter((job) => isActive(job.lifecycle)).length + agents.length;
+        const ready = jobs.filter((job) => job.lifecycle.readiness.kind === "ready").length;
+        const retained = entries.length - active;
+        const info = `${active} active${ready ? ` · ${ready} ready` : ""}${retained ? ` · ${retained} retained` : ""}`;
+        const border = (text: string) => theme.fg("accent", text);
+        const expanded = runtime.widgetExpanded ?? true;
+        const lines = [panelTop(`${expanded ? "▼" : "▶"} herdr jobs`, info, width, border)];
+        if (expanded) {
+          for (const job of jobs) {
+            const projection = projectLifecycle(job.lifecycle, now);
+            const color = projection === "failed" ? "error" : projection === "ready" || projection === "completed" ? "success" : projection === "stalled" ? "warning" : "muted";
+            const left = ` ${formatElapsed(job.metadata.startedAt, now)}  ${job.metadata.name} `;
+            const right = ` ${theme.fg(color, `${projection} · ${job.metadata.paneId}`)} `;
+            lines.push(panelLine(left, right, width, border));
+          }
+          for (const agent of agents) {
+            const color = agent.status === "blocked" ? "warning" : agent.status === "working" ? "accent" : "muted";
+            const left = ` ${formatElapsed(agent.metadata.startedAt, now)}  ${agent.metadata.name} `;
+            const right = ` ${theme.fg(color, `agent ${agent.status} · ${agent.metadata.paneId}`)} `;
+            lines.push(panelLine(left, right, width, border));
+          }
+        } else {
+          lines.push(panelLine(` ${theme.fg("dim", "F8 expands jobs")}`, "", width, border));
         }
-        for (const agent of agents) {
-          const color = agent.status === "blocked" ? "warning" : agent.status === "working" ? "accent" : "muted";
-          const left = ` ${formatElapsed(agent.metadata.startedAt, now)}  ${agent.metadata.name} `;
-          const right = ` ${theme.fg(color, `agent ${agent.status} · ${agent.metadata.paneId}`)} `;
-          lines.push(panelLine(left, right, width, border));
-        }
-      } else {
-        lines.push(panelLine(` ${theme.fg("dim", "F8 expands jobs")}`, "", width, border));
-      }
-      lines.push(panelBottom(width, border));
-      return lines;
-    },
-  }), { placement: "aboveEditor" });
+        lines.push(panelBottom(width, border));
+        return lines;
+      },
+    };
+  }, { placement: "aboveEditor" });
+  runtime.widgetMounted = true;
 }
 
 function toggleWidget(): boolean {
@@ -362,6 +377,8 @@ export default function herdrJobsExtension(pi: ExtensionAPI) {
 
   pi.on("session_shutdown", async (event) => {
     clearWidgetTimer(runtime);
+    runtime.widgetMounted = false;
+    runtime.widgetRequestRender = undefined;
     if (event.reason === "reload") {
       // Keep watcher state, but never pair the reloaded extension API with the
       // old session context while Pi is rebuilding its extension bindings.
@@ -501,6 +518,30 @@ export default function herdrJobsExtension(pi: ExtensionAPI) {
         trackingDisposition: "active",
         status: "started",
       });
+    },
+  });
+
+  pi.registerTool({
+    name: "herdr_agent_send",
+    label: "herdr agent send",
+    description: "Send a message to a Herdr agent target and submit it with Enter. Use this instead of `herdr agent send` through bash: the raw CLI writes literal text and does not submit a newline. Target accepts a unique Herdr agent name, terminal id, or pane id.",
+    promptSnippet: "Send and submit a message to a Herdr agent by target name/id.",
+    promptGuidelines: ["Use herdr_agent_send, not raw `herdr agent send` in bash, when messaging a Herdr agent: this tool appends the required newline so the message is submitted."],
+    parameters: Type.Object({
+      target: Type.String({ description: "Unique Herdr agent name, terminal id, or pane id." }),
+      message: Type.String({ description: "Message to send and submit." }),
+    }),
+    renderCall(args, theme) {
+      const target = typeof args.target === "string" && args.target ? args.target : "(agent)";
+      return new Text(theme.fg("toolTitle", theme.bold(`herdr agent send ${target}`)), 0, 0);
+    },
+    async execute(_toolCallId, params) {
+      const target = params.target.trim();
+      if (!target) throw new Error("herdr agent target must not be empty.");
+      if (!params.message) throw new Error("herdr agent message must not be empty.");
+      await ensureHerdrAvailable();
+      await herdr.sendAgentText(target, params.message);
+      return textResult(`Submitted message to Herdr agent "${target}".`, { target, submitted: true, newlineAppended: !params.message.endsWith("\n") });
     },
   });
 

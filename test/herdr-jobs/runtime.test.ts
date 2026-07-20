@@ -10,6 +10,7 @@ test("runtime adoption initializes delivery locks added after an older reload", 
     holder[key] = { jobs: new Map() };
     const runtime = getRuntime();
     assert.ok(runtime.deliveryLocks instanceof Map);
+    assert.equal(runtime.widgetMounted, false);
   } finally {
     if (previous === undefined) delete holder[key];
     else holder[key] = previous;

@@ -13,6 +13,8 @@ test("parses managed agent launch and status responses", () => {
   assert.deepEqual(__herdrTest__.parseAgentLaunch('{"result":{"agent":{"pane_id":"w:p2","terminal_id":"term_1"}}}'), { paneId: "w:p2", terminalId: "term_1" });
   assert.deepEqual(__herdrTest__.parseAgentInspection('{"result":{"agent":{"agent_status":"working"}}}'), { kind: "present", status: "working" });
   assert.deepEqual(__herdrTest__.parseAgentInspection('{"error":{"code":"agent_not_found","message":"gone"}}'), { kind: "missing", error: "gone" });
+  assert.equal(__herdrTest__.agentSubmissionText("continue"), "continue\n");
+  assert.equal(__herdrTest__.agentSubmissionText("continue\n"), "continue\n");
 });
 
 test("distinguishes a missing pane from a malformed response", () => {  assert.deepEqual(__herdrTest__.parsePaneInspection('{"error":{"code":"pane_not_found","message":"gone"}}', "w:p2"), { kind: "missing", error: "gone" });

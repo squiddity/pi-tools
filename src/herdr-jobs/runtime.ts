@@ -11,6 +11,8 @@ export interface HerdrJobsRuntime {
   latestCtx?: ExtensionContext;
   widgetInterval?: ReturnType<typeof setInterval>;
   widgetExpanded?: boolean;
+  widgetMounted?: boolean;
+  widgetRequestRender?: () => void;
   sessionId?: string;
   deliveryLocks: Map<string, Promise<void>>;
 }
@@ -26,6 +28,7 @@ export function getRuntime(): HerdrJobsRuntime {
   if (!holder[RUNTIME_KEY].managedAgents) holder[RUNTIME_KEY].managedAgents = new Map();
   if (!holder[RUNTIME_KEY].deliveryLocks) holder[RUNTIME_KEY].deliveryLocks = new Map();
   if (holder[RUNTIME_KEY].widgetExpanded === undefined) holder[RUNTIME_KEY].widgetExpanded = true;
+  if (holder[RUNTIME_KEY].widgetMounted === undefined) holder[RUNTIME_KEY].widgetMounted = false;
   return holder[RUNTIME_KEY] as HerdrJobsRuntime;
 }
 

@@ -163,4 +163,5 @@ export interface HerdrOperations {
   closePane(paneId: string): Promise<void>;
   startAgent(options: { name: string; cwd: string; placement: AgentPlacement; env: Record<string, string>; argv: string[] }): Promise<HerdrAgentLaunch>;
   inspectAgent(target: string): Promise<HerdrAgentInspection | { kind: "missing"; error?: string } | { kind: "unavailable"; error: string }>;
+  sendAgentText(target: string, text: string): Promise<void>;
 }

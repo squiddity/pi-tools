@@ -12,7 +12,7 @@ import type { HerdrOperations, PersistedJobMetadata } from "../../src/herdr-jobs
 function missingPaneOperations(): HerdrOperations {
   return {
     createPane: async () => "pane", renamePane: async () => {}, runPane: async () => {}, inspectPane: async () => ({ kind: "missing", error: "gone" }), readPane: async () => "", interruptPane: async () => {}, closePane: async () => { throw new Error("pane not found"); },
-    startAgent: async () => ({ paneId: "pane", terminalId: "terminal" }), inspectAgent: async () => ({ kind: "missing", error: "gone" }),
+    startAgent: async () => ({ paneId: "pane", terminalId: "terminal" }), inspectAgent: async () => ({ kind: "missing", error: "gone" }), sendAgentText: async () => {},
   };
 }
 

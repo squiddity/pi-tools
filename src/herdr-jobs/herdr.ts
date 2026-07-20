@@ -46,6 +46,11 @@ export function parseCreatedTab(output: string): { tabId: string; rootPaneId: st
   return { tabId, rootPaneId };
 }
 
+/** Herdr's agent send API writes literal bytes; append Enter to submit a Pi prompt. */
+export function agentSubmissionText(message: string): string {
+  return message.endsWith("\n") ? message : `${message}\n`;
+}
+
 export function parseAgentLaunch(output: string): HerdrAgentLaunch {
   const parsed = parseJson(output, "agent start");
   const paneId = getString(parsed, "result", "agent", "pane_id");
@@ -191,6 +196,9 @@ export const herdr: HerdrOperations = {
         : { kind: "unavailable" as const, error: inspection.kind === "unavailable" ? inspection.error : "herdr agent get failed" };
     }
   },
+  async sendAgentText(target, text) {
+    await run(["agent", "send", target, agentSubmissionText(text)]);
+  },
 };
 
-export const __herdrTest__ = { parseCreatedPane, parseCreatedTab, parsePaneInspection, parsePaneInspectionError, parseAgentLaunch, parseAgentInspection };
+export const __herdrTest__ = { parseCreatedPane, parseCreatedTab, parsePaneInspection, parsePaneInspectionError, parseAgentLaunch, parseAgentInspection, agentSubmissionText };

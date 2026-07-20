@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import type { AgentExtensionMode } from "./types.ts";
 
 export const MANAGED_AGENT_DONE_TOOL = "herdr_agent_done";
+export const MANAGED_AGENT_SEND_TOOL = "herdr_agent_send";
 
 export function findDuplicateTrackedName(name: string, jobNames: Iterable<string>, activeAgentNames: Iterable<string>): "job" | "managed_agent" | undefined {
   for (const current of jobNames) if (current === name) return "job";
@@ -36,7 +37,7 @@ export function buildManagedAgentArgv(options: {
   if (options.model) argv.push("--model", options.model);
   if (options.thinking) argv.push("--thinking", options.thinking);
   if (options.tools && options.tools.length > 0) {
-    argv.push("--tools", [...new Set([...options.tools, MANAGED_AGENT_DONE_TOOL])].join(","));
+    argv.push("--tools", [...new Set([...options.tools, MANAGED_AGENT_DONE_TOOL, MANAGED_AGENT_SEND_TOOL])].join(","));
   }
   argv.push(options.task);
   return argv;

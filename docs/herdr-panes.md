@@ -81,6 +81,8 @@ Managed agents start in a dedicated Herdr **tab** by default. Set `placement: "r
 
 A managed agent is deliberately **not** auto-completed when Herdr reports it idle: a root orchestrator may be waiting for asynchronous descendant results. The agent calls `herdr_agent_done` after it has processed those results. That writes the completion artifact, shuts down the child Pi process, and delivers the final summary to the caller automatically. Do not poll the managed agent from the parent.
 
+To message an agent started through Herdr, use `herdr_agent_send({ target, message })`. It appends Enter and submits the prompt. Do not use raw `herdr agent send` through `bash`; that CLI command sends literal text only and leaves it in the child editor until another input submits it. With `extensionMode: "explicit"`, include the Herdr jobs extension entrypoint in `extensions` when the child needs this messaging tool.
+
 The direct CLI workflow below remains appropriate when the extension is unavailable or when a genuinely short synchronous gate is required.
 
 ## Open a tab for a long-running command
