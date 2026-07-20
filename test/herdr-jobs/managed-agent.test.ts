@@ -20,7 +20,7 @@ test("builds an explicitly isolated Pi argv with a completion tool", () => {
   assert.deepEqual(argv, [
     "pi", "--session", "/tmp/session.jsonl", "--no-extensions", "--extension", "/tmp/child.ts",
     "--extension", "/project/.pi/extensions/dev.ts", "--model", "test/model", "--thinking", "high",
-    "--tools", "read,subagent,herdr_agent_done,herdr_agent_send", "coordinate work",
+    "--tools", "read,subagent,herdr_agent_done,herdr_agent_send,herdr_agent_read", "coordinate work",
   ]);
 });
 

@@ -323,6 +323,17 @@ function startManagedAgentWatcher(agent: RunningManagedAgent): void {
     });
 }
 
+function resolveManagedAgentTarget(target: string): { agent: RunningManagedAgent; herdrTarget: string } | undefined {
+  const matches = [...runtime.managedAgents.values()].filter((agent) =>
+    agent.metadata.id === target ||
+    agent.metadata.name === target ||
+    agent.metadata.paneId === target ||
+    agent.metadata.terminalId === target,
+  );
+  if (matches.length === 1) return { agent: matches[0]!, herdrTarget: matches[0]!.metadata.terminalId };
+  return undefined;
+}
+
 function resolveJob(id?: string, name?: string): RunningJob {
   if (id) {
     const job = runtime.jobs.get(id);
@@ -540,8 +551,33 @@ export default function herdrJobsExtension(pi: ExtensionAPI) {
       if (!target) throw new Error("herdr agent target must not be empty.");
       if (!params.message) throw new Error("herdr agent message must not be empty.");
       await ensureHerdrAvailable();
-      await herdr.sendAgentText(target, params.message);
+      const managed = resolveManagedAgentTarget(target);
+      await herdr.sendAgentText(managed?.herdrTarget ?? target, params.message);
       return textResult(`Submitted message to Herdr agent "${target}".`, { target, submitted: true, newlineAppended: !params.message.endsWith("\n") });
+    },
+  });
+
+  pi.registerTool({
+    name: "herdr_agent_read",
+    label: "herdr agent read",
+    description: "Read recent output from a Herdr agent. Use this for managed-agent entries from herdr_jobs_list; herdr_job_read is only for ordinary shell jobs. This is explicit inspection, not polling.",
+    promptSnippet: "Read recent output from a tracked Herdr agent (not an ordinary shell job).",
+    promptGuidelines: ["Use herdr_agent_read for entries labeled agent in herdr_jobs_list; use herdr_job_read only for entries labeled job."],
+    parameters: Type.Object({
+      target: Type.String({ description: "Managed-agent id/name, Herdr terminal id, or pane id." }),
+      lines: Type.Optional(Type.Integer({ minimum: 1, maximum: 500 })),
+    }),
+    renderCall(args, theme) {
+      const target = typeof args.target === "string" && args.target ? args.target : "(agent)";
+      return new Text(theme.fg("toolTitle", theme.bold(`herdr agent read ${target}`)), 0, 0);
+    },
+    async execute(_toolCallId, params) {
+      const target = params.target.trim();
+      if (!target) throw new Error("herdr agent target must not be empty.");
+      await ensureHerdrAvailable();
+      const managed = resolveManagedAgentTarget(target);
+      const output = await herdr.readAgent(managed?.herdrTarget ?? target, params.lines ?? 80);
+      return textResult(`${output}\n\nAgent: ${target}`, { target, lines: params.lines ?? 80, kind: "managed_agent" });
     },
   });
 
@@ -643,7 +679,7 @@ export default function herdrJobsExtension(pi: ExtensionAPI) {
 
   pi.registerTool({
     name: "herdr_jobs_list", label: "herdr jobs list",
-    description: "List the same tracked jobs and active managed agents shown in the herdr jobs widget, including retained failures. This is for explicit inspection, not polling.",
+    description: "List the same tracked jobs and active managed agents shown in the herdr jobs widget, including retained failures. Lines are prefixed job or agent so the matching read tool is unambiguous. This is for explicit inspection, not polling.",
     parameters: Type.Object({}),
     renderCall(_args, theme) {
       return new Text(theme.fg("toolTitle", theme.bold("herdr jobs list")), 0, 0);
@@ -656,8 +692,8 @@ export default function herdrJobsExtension(pi: ExtensionAPI) {
       const jobDetails = jobs.map((job) => ({ id: job.metadata.id, name: job.metadata.name, paneId: job.metadata.paneId, kind: job.metadata.kind, state: projectLifecycle(job.lifecycle, Date.now()), readiness: job.lifecycle.readiness.kind, logFile: job.paths.logFile, artifactDir: job.paths.root }));
       const agentDetails = agents.map((agent) => ({ id: agent.metadata.id, name: agent.metadata.name, paneId: agent.metadata.paneId, terminalId: agent.metadata.terminalId, kind: "managed_agent", state: agent.status, sessionFile: agent.paths.sessionFile }));
       const lines = [
-        ...jobs.map((job) => `${job.metadata.id}  ${jobSummary(job)}`),
-        ...agents.map((agent) => `${agent.metadata.id}  ${formatElapsed(agent.metadata.startedAt)}  ${agent.metadata.name} — agent ${agent.status} · ${agent.metadata.paneId}`),
+        ...jobs.map((job) => `job ${job.metadata.id}  ${jobSummary(job)}`),
+        ...agents.map((agent) => `agent ${agent.metadata.id}  ${formatElapsed(agent.metadata.startedAt)}  ${agent.metadata.name} — ${agent.status} · ${agent.metadata.paneId}`),
       ];
       return textResult(lines.join("\n"), { jobs: jobDetails, agents: agentDetails });
     },

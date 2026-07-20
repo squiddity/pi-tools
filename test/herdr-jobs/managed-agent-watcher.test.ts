@@ -10,7 +10,7 @@ import type { HerdrOperations, RunningManagedAgent } from "../../src/herdr-jobs/
 function operations(): HerdrOperations {
   return {
     createPane: async () => "pane", renamePane: async () => {}, runPane: async () => {}, inspectPane: async () => ({ kind: "present" }), readPane: async () => "", interruptPane: async () => {}, closePane: async () => {},
-    startAgent: async () => ({ paneId: "pane", terminalId: "terminal" }), inspectAgent: async () => ({ kind: "present", status: "working" }), sendAgentText: async () => {},
+    startAgent: async () => ({ paneId: "pane", terminalId: "terminal" }), inspectAgent: async () => ({ kind: "present", status: "working" }), readAgent: async () => "", sendAgentText: async () => {},
   };
 }
 

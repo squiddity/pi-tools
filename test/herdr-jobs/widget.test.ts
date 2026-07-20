@@ -22,9 +22,10 @@ test("jobs widget is mounted once instead of being re-registered on refresh", as
 
   const handlers = new Map<string, any>();
   let widgetSets = 0;
+  const tools = new Map<string, any>();
   const pi = {
     on(name: string, handler: unknown) { handlers.set(name, handler); },
-    registerTool() {}, registerMessageRenderer() {}, registerShortcut() {},
+    registerTool(tool: { name: string }) { tools.set(tool.name, tool); }, registerMessageRenderer() {}, registerShortcut() {},
   } as unknown as ExtensionAPI;
   const ctx = {
     hasUI: true,
@@ -37,6 +38,8 @@ test("jobs widget is mounted once instead of being re-registered on refresh", as
   await handlers.get("session_start")({ reason: "startup" }, ctx);
   await handlers.get("session_start")({ reason: "startup" }, ctx);
   assert.equal(widgetSets, 1);
+  const listed = await tools.get("herdr_jobs_list").execute();
+  assert.match(listed.content[0].text, /^job abcdefgh/m);
 
   await handlers.get("session_shutdown")({ reason: "quit" }, ctx);
   assert.equal(runtime.widgetMounted, false);

@@ -196,6 +196,9 @@ export const herdr: HerdrOperations = {
         : { kind: "unavailable" as const, error: inspection.kind === "unavailable" ? inspection.error : "herdr agent get failed" };
     }
   },
+  async readAgent(target, lines) {
+    return run(["agent", "read", target, "--source", "recent-unwrapped", "--lines", String(Math.max(1, Math.min(500, Math.floor(lines))))]);
+  },
   async sendAgentText(target, text) {
     await run(["agent", "send", target, agentSubmissionText(text)]);
   },
