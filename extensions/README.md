@@ -4,6 +4,17 @@ Pi loads direct `.ts` / `.js` files here and `index.ts` / `index.js` from one im
 
 Existing small standalone extensions may remain as direct files.
 
+## pi-footer configuration
+
+[`../docs/pi-footer.example.json`](../docs/pi-footer.example.json) is a portable copy of the current `pi-footer` layout. Install it after installing `pi-footer` with:
+
+```sh
+mkdir -p ~/.pi/agent/extensions
+cp docs/pi-footer.example.json ~/.pi/agent/extensions/pi-footer.json
+```
+
+The file contains no host paths, credentials, or other personal data. `pi-footer` also supports `/footer` for editing the configuration interactively.
+
 ## Lemonade provider
 
 [`lemonade-provider/index.ts`](lemonade-provider/index.ts) registers locally served Lemonade models as the `lemonade` provider. It discovers models from the Ollama-compatible API and reads context lengths when available.

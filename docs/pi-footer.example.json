@@ -1,0 +1,202 @@
+{
+  "version": 1,
+  "enabled": true,
+  "preset": "pi-footer",
+  "lines": [
+    [
+      {
+        "id": "cwd-mr9diau6-skgm9q",
+        "type": "cwd",
+        "enabled": true,
+        "options": {
+          "raw": true,
+          "icon": "",
+          "fg": "pi:dim",
+          "bg": "default",
+          "bold": false,
+          "cwdDisplayStyle": "full-home",
+          "segments": 2
+        }
+      },
+      {
+        "id": "git-branch-mr9diau6-ndslqt",
+        "type": "git-branch",
+        "enabled": true,
+        "options": {
+          "raw": false,
+          "hideWhenEmpty": true,
+          "icon": " ",
+          "text": "",
+          "fg": "pi:dim",
+          "bg": "default",
+          "bold": false,
+          "gitBranchDisplayStyle": "round-brackets",
+          "surroundLeft": "",
+          "surroundRight": ""
+        }
+      },
+      {
+        "id": "session-name-mr9diau6-gyblqq",
+        "type": "session-name",
+        "enabled": true,
+        "options": {
+          "raw": false,
+          "hideWhenEmpty": true,
+          "icon": " • ",
+          "text": "-",
+          "fg": "pi:dim",
+          "bg": "default",
+          "bold": false
+        }
+      }
+    ],
+    [
+      {
+        "id": "model-mr9diau6-jvxsj6",
+        "type": "model",
+        "enabled": true,
+        "options": {
+          "raw": true,
+          "icon": "",
+          "fg": "pi:dim",
+          "bg": "default",
+          "bold": false,
+          "showProvider": false
+        }
+      },
+      {
+        "id": "thinking-level-mr9diau6-95cq93",
+        "type": "thinking-level",
+        "enabled": true,
+        "options": {
+          "raw": false,
+          "hideWhenEmpty": true,
+          "icon": " • ",
+          "text": "",
+          "fg": "pi:dim",
+          "bg": "default",
+          "bold": false
+        }
+      },
+      {
+        "id": "flex-separator-mr9diau6-xnxnxw",
+        "type": "flex-separator",
+        "enabled": true,
+        "options": {
+          "fg": "default",
+          "bg": "default",
+          "bold": false,
+          "hideWhenEmpty": true
+        }
+      },
+      {
+        "id": "context-mr9diau6-pq8ahp",
+        "type": "context",
+        "enabled": true,
+        "options": {
+          "raw": false,
+          "icon": " ",
+          "fg": "pi:dim",
+          "bg": "default",
+          "bold": false,
+          "contextConditionalColors": true,
+          "contextWarningPercent": 70,
+          "contextDangerPercent": 90,
+          "warningFg": "pi:warning",
+          "warningBg": "default",
+          "dangerFg": "pi:error",
+          "dangerBg": "default"
+        }
+      },
+      {
+        "id": "context-window-mr9diau6-9aeuvg",
+        "type": "context-window",
+        "enabled": true,
+        "options": {
+          "raw": false,
+          "hideWhenZero": false,
+          "icon": "/",
+          "fg": "pi:dim",
+          "bg": "default",
+          "bold": false,
+          "tokenFormatStyle": "compact",
+          "contextConditionalColors": true,
+          "contextWarningPercent": 70,
+          "contextDangerPercent": 90,
+          "warningFg": "pi:warning",
+          "warningBg": "default",
+          "dangerFg": "pi:error",
+          "dangerBg": "default"
+        }
+      },
+      {
+        "id": "tokens-mr9diau6-wmvjsj",
+        "type": "tokens",
+        "enabled": true,
+        "options": {
+          "raw": false,
+          "icon": " ",
+          "fg": "pi:dim",
+          "bg": "default",
+          "bold": false,
+          "tokenFormatStyle": "compact"
+        }
+      },
+      {
+        "id": "cache-read-mr9diau6-61wbgc",
+        "type": "cache-read",
+        "enabled": true,
+        "options": {
+          "raw": false,
+          "hideWhenZero": true,
+          "icon": " R",
+          "fg": "pi:dim",
+          "bg": "default",
+          "bold": false,
+          "tokenFormatStyle": "compact"
+        }
+      },
+      {
+        "id": "cache-write-mr9diau6-enizmv",
+        "type": "cache-write",
+        "enabled": true,
+        "options": {
+          "raw": false,
+          "hideWhenZero": true,
+          "icon": " W",
+          "fg": "pi:dim",
+          "bg": "default",
+          "bold": false,
+          "tokenFormatStyle": "compact"
+        }
+      },
+      {
+        "id": "cost-mr9diau6-ovrfc5",
+        "type": "cost",
+        "enabled": true,
+        "options": {
+          "raw": false,
+          "icon": " ",
+          "fg": "pi:dim",
+          "bg": "default",
+          "bold": false,
+          "costFormatStyle": "compact",
+          "showSubscription": true
+        }
+      }
+    ]
+  ],
+  "separator": "none",
+  "separatorFg": "default",
+  "separatorBg": "default",
+  "iconMode": "text",
+  "minimalist": false,
+  "terminal": {
+    "widthMode": "full",
+    "colorLevel": "ansi256"
+  },
+  "extensionStatusRow": {
+    "hiddenKeys": [],
+    "knownKeys": []
+  }
+}
