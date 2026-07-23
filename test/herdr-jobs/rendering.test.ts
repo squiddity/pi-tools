@@ -37,11 +37,6 @@ test("result messages use a coloured box and hide log output until expanded", as
   const expanded = renderer(message, { expanded: true }, theme).render(160).join("\n");
   assert.match(expanded, /very noisy log line/);
 
-  assert.ok(tools.get("herdr_agent_start"));
-  assert.ok(tools.get("herdr_agent_send"));
-  assert.ok(tools.get("herdr_agent_read"));
-  assert.ok(renderers.get("herdr_agent_result"));
-
   const startCall = tools.get("herdr_job_start").renderCall({}, theme).render(160).join("\n");
   assert.match(startCall, /herdr job start/);
   assert.doesNotMatch(startCall, /herdr_job_start/);

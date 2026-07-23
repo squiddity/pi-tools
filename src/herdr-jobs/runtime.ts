@@ -2,11 +2,10 @@ import { StringDecoder } from "node:string_decoder";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { writeAtomicJson } from "./artifacts.ts";
 import { createLifecycle, markRunning } from "./lifecycle.ts";
-import type { JobPaths, PersistedJobMetadata, RunningJob, RunningManagedAgent } from "./types.ts";
+import type { JobPaths, PersistedJobMetadata, RunningJob } from "./types.ts";
 
 export interface HerdrJobsRuntime {
   jobs: Map<string, RunningJob>;
-  managedAgents: Map<string, RunningManagedAgent>;
   pi?: ExtensionAPI;
   latestCtx?: ExtensionContext;
   widgetInterval?: ReturnType<typeof setInterval>;
@@ -19,17 +18,26 @@ export interface HerdrJobsRuntime {
 
 const RUNTIME_KEY = Symbol.for("pi-tools/herdr-jobs/runtime");
 
+type LegacyRuntime = Partial<HerdrJobsRuntime> & {
+  managedAgents?: Map<unknown, { abortController?: AbortController }>;
+};
+
 export function getRuntime(): HerdrJobsRuntime {
-  const holder = globalThis as typeof globalThis & { [RUNTIME_KEY]?: Partial<HerdrJobsRuntime> };
-  if (!holder[RUNTIME_KEY]) holder[RUNTIME_KEY] = { jobs: new Map(), managedAgents: new Map(), deliveryLocks: new Map() };
-  // Runtime objects survive /reload under a global symbol. Add fields introduced
-  // by newer extension versions before a preserved watcher can use them.
-  if (!holder[RUNTIME_KEY].jobs) holder[RUNTIME_KEY].jobs = new Map();
-  if (!holder[RUNTIME_KEY].managedAgents) holder[RUNTIME_KEY].managedAgents = new Map();
-  if (!holder[RUNTIME_KEY].deliveryLocks) holder[RUNTIME_KEY].deliveryLocks = new Map();
-  if (holder[RUNTIME_KEY].widgetExpanded === undefined) holder[RUNTIME_KEY].widgetExpanded = true;
-  if (holder[RUNTIME_KEY].widgetMounted === undefined) holder[RUNTIME_KEY].widgetMounted = false;
-  return holder[RUNTIME_KEY] as HerdrJobsRuntime;
+  const holder = globalThis as typeof globalThis & { [RUNTIME_KEY]?: LegacyRuntime };
+  if (!holder[RUNTIME_KEY]) holder[RUNTIME_KEY] = { jobs: new Map(), deliveryLocks: new Map() };
+  const state = holder[RUNTIME_KEY];
+  // Runtime objects survive /reload under a global symbol. Stop watchers owned
+  // by the removed agent-management feature before adopting an older runtime.
+  if (state.managedAgents) {
+    for (const item of state.managedAgents.values()) item.abortController?.abort();
+    state.managedAgents.clear();
+    delete state.managedAgents;
+  }
+  if (!state.jobs) state.jobs = new Map();
+  if (!state.deliveryLocks) state.deliveryLocks = new Map();
+  if (state.widgetExpanded === undefined) state.widgetExpanded = true;
+  if (state.widgetMounted === undefined) state.widgetMounted = false;
+  return state as HerdrJobsRuntime;
 }
 
 export function createRunningJob(metadata: PersistedJobMetadata, paths: JobPaths): RunningJob {

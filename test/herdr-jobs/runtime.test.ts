@@ -17,6 +17,24 @@ test("runtime adoption initializes delivery locks added after an older reload", 
   }
 });
 
+test("runtime adoption stops watchers from the removed agent feature", () => {
+  const key = Symbol.for("pi-tools/herdr-jobs/runtime");
+  const holder = globalThis as typeof globalThis & { [key: symbol]: unknown };
+  const previous = holder[key];
+  const controller = new AbortController();
+  const legacyAgents = new Map([["old", { abortController: controller }]]);
+  try {
+    holder[key] = { jobs: new Map(), deliveryLocks: new Map(), managedAgents: legacyAgents };
+    getRuntime();
+    assert.equal(controller.signal.aborted, true);
+    assert.equal(legacyAgents.size, 0);
+    assert.equal(Object.hasOwn(holder[key] as object, "managedAgents"), false);
+  } finally {
+    if (previous === undefined) delete holder[key];
+    else holder[key] = previous;
+  }
+});
+
 test("delivery locks serialize duplicate event delivery", async () => {
   const runtime = { jobs: new Map(), deliveryLocks: new Map() } as HerdrJobsRuntime;
   const order: string[] = [];

@@ -20,7 +20,7 @@ Recommended implementation steps 1–3 are complete: the disposable wheel/list e
 
 ## Herdr jobs extension
 
-[`extensions/herdr-jobs/`](extensions/herdr-jobs/) provides non-blocking `herdr_job_*` tools for ordinary shell commands in Herdr. `herdr_job_start` creates a visible pane and durable artifacts, returns immediately, and sends automatic readiness/completion notifications; use it for long-running tests, builds, servers, and watchers. `herdr_agent_start` launches a managed, visible Pi agent through Herdr with caller-selected extensions and active tools; its explicit `herdr_agent_done` completion returns a summary automatically. Use `subagent` for ordinary integrated coding delegation.
+[`extensions/herdr-jobs/`](extensions/herdr-jobs/) provides non-blocking `herdr_job_*` tools for ordinary shell commands in Herdr. `herdr_job_start` creates a visible pane and durable artifacts, returns immediately, and sends automatic readiness/completion notifications; use it for long-running tests, builds, servers, and watchers. Use `subagent` for coding delegation, including recursive orchestration and explicit development-extension loading.
 
 Try the complete package for one Pi invocation:
 
@@ -28,7 +28,7 @@ Try the complete package for one Pi invocation:
 pi -e .
 ```
 
-After `herdr_job_start` or `herdr_agent_start`, do not poll with `herdr wait`, sleeps, loops, or repeated reads. Completion arrives as a steer message. See [`docs/herdr-panes.md`](docs/herdr-panes.md) for examples, isolation modes, and fallback CLI use.
+After `herdr_job_start`, do not poll with `herdr wait`, sleeps, loops, or repeated reads. Completion arrives as a steer message. See [`docs/herdr-panes.md`](docs/herdr-panes.md) for examples, cleanup modes, and fallback CLI use.
 
 ## Acknowledgements
 

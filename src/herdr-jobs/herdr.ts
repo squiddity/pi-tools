@@ -1,6 +1,6 @@
 import { execFile as execFileCallback } from "node:child_process";
 import { promisify } from "node:util";
-import type { HerdrAgentInspection, HerdrAgentLaunch, HerdrOperations, PaneInspection, Placement } from "./types.ts";
+import type { HerdrOperations, PaneInspection, Placement } from "./types.ts";
 
 const execFile = promisify(execFileCallback);
 const MAX_ERROR_OUTPUT = 4_000;
@@ -36,40 +36,6 @@ export function parseCreatedPane(output: string, placement: Placement): string {
     : getString(parsed, "result", "pane", "pane_id");
   if (!paneId) throw new Error(`herdr ${placement === "tab" ? "tab create" : "pane split"} response contained no pane id.`);
   return paneId;
-}
-
-export function parseCreatedTab(output: string): { tabId: string; rootPaneId: string } {
-  const parsed = parseJson(output, "tab create");
-  const tabId = getString(parsed, "result", "tab", "tab_id");
-  const rootPaneId = getString(parsed, "result", "root_pane", "pane_id");
-  if (!tabId || !rootPaneId) throw new Error("herdr tab create response contained no tab or root pane id.");
-  return { tabId, rootPaneId };
-}
-
-/** Herdr's agent send API writes literal bytes; append Enter to submit a Pi prompt. */
-export function agentSubmissionText(message: string): string {
-  return message.endsWith("\n") ? message : `${message}\n`;
-}
-
-export function parseAgentLaunch(output: string): HerdrAgentLaunch {
-  const parsed = parseJson(output, "agent start");
-  const paneId = getString(parsed, "result", "agent", "pane_id");
-  const terminalId = getString(parsed, "result", "agent", "terminal_id");
-  if (!paneId || !terminalId) throw new Error("herdr agent start response contained no pane or terminal id.");
-  return { paneId, terminalId };
-}
-
-export function parseAgentInspection(output: string): HerdrAgentInspection | { kind: "missing"; error?: string } {
-  const parsed = parseJson(output, "agent get");
-  const errorCode = getString(parsed, "error", "code");
-  if (errorCode === "agent_not_found" || errorCode === "not_found" || errorCode === "pane_not_found") {
-    return { kind: "missing", error: getString(parsed, "error", "message") ?? "agent not found" };
-  }
-  const status = getString(parsed, "result", "agent", "agent_status");
-  if (status !== "idle" && status !== "working" && status !== "blocked" && status !== "done" && status !== "unknown") {
-    throw new Error("herdr agent get response contained no recognized agent status.");
-  }
-  return { kind: "present", status };
 }
 
 export function parsePaneInspection(output: string, paneId: string): PaneInspection {
@@ -160,48 +126,6 @@ export const herdr: HerdrOperations = {
   async closePane(paneId) {
     await run(["pane", "close", paneId]);
   },
-  async startAgent({ name, cwd, placement, env, argv }) {
-    const currentTab = process.env.HERDR_TAB_ID;
-    const workspace = process.env.HERDR_WORKSPACE_ID;
-    if (!currentTab || !workspace) throw new Error("HERDR_TAB_ID and HERDR_WORKSPACE_ID are required to place a managed agent.");
-    if (argv.length === 0) throw new Error("Managed agent argv must not be empty.");
-    let tab = currentTab;
-    let temporaryRootPane: string | undefined;
-    if (placement === "tab") {
-      const created = parseCreatedTab(await run(["tab", "create", "--workspace", workspace, "--label", name, "--cwd", cwd, "--no-focus"]));
-      tab = created.tabId;
-      temporaryRootPane = created.rootPaneId;
-    }
-    try {
-      const args = ["agent", "start", name, "--cwd", cwd, "--tab", tab, "--split", placement === "tab" ? "right" : placement, "--no-focus"];
-      for (const [key, value] of Object.entries(env)) args.push("--env", `${key}=${value}`);
-      args.push("--", ...argv);
-      const launched = parseAgentLaunch(await run(args));
-      if (temporaryRootPane) await run(["pane", "close", temporaryRootPane]);
-      return launched;
-    } catch (error) {
-      if (temporaryRootPane) {
-        try { await run(["pane", "close", temporaryRootPane]); } catch { /* best effort cleanup */ }
-      }
-      throw error;
-    }
-  },
-  async inspectAgent(target) {
-    try {
-      return parseAgentInspection(await run(["agent", "get", target]));
-    } catch (error) {
-      const inspection = parsePaneInspectionError(error);
-      return inspection.kind === "missing"
-        ? inspection
-        : { kind: "unavailable" as const, error: inspection.kind === "unavailable" ? inspection.error : "herdr agent get failed" };
-    }
-  },
-  async readAgent(target, lines) {
-    return run(["agent", "read", target, "--source", "recent-unwrapped", "--lines", String(Math.max(1, Math.min(500, Math.floor(lines))))]);
-  },
-  async sendAgentText(target, text) {
-    await run(["agent", "send", target, agentSubmissionText(text)]);
-  },
 };
 
-export const __herdrTest__ = { parseCreatedPane, parseCreatedTab, parsePaneInspection, parsePaneInspectionError, parseAgentLaunch, parseAgentInspection, agentSubmissionText };
+export const __herdrTest__ = { parseCreatedPane, parsePaneInspection, parsePaneInspectionError };

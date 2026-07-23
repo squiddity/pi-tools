@@ -7,50 +7,8 @@ export type JobKind = "finite" | "service";
 export type Placement = "down" | "right" | "tab";
 export type DeliveryState = "pending" | "delivered" | "suppressed";
 export type CleanupPolicy = "on_success" | "always" | "never";
-export type PaneDisposition = "open" | "retained" | "closed" | "missing" | "closing" | "unknown";
+export type PaneDisposition = "open" | "retained" | "closed" | "missing";
 export type TrackingDisposition = "active" | "retained" | "removed";
-export type AgentExtensionMode = "normal" | "explicit";
-export type AgentPlacement = "down" | "right" | "tab";
-
-export interface ManagedAgentPaths {
-  root: string;
-  metadataFile: string;
-  completionFile: string;
-  sessionFile: string;
-}
-
-export interface ManagedAgentMetadata {
-  version: 1;
-  id: string;
-  parentSessionId?: string;
-  name: string;
-  task: string;
-  cwd: string;
-  paneId: string;
-  terminalId: string;
-  extensionMode: AgentExtensionMode;
-  extensions: string[];
-  tools?: string[];
-  sessionFile: string;
-  startedAt: number;
-}
-
-export interface ManagedAgentCompletion {
-  version: 1;
-  id: string;
-  completedAt: number;
-  summary?: string;
-}
-
-export interface RunningManagedAgent {
-  metadata: ManagedAgentMetadata;
-  paths: ManagedAgentPaths;
-  status: "starting" | "working" | "idle" | "blocked" | "completed" | "failed" | "closed";
-  abortController?: AbortController;
-  watcherStarted?: boolean;
-  delivered?: boolean;
-}
-
 export interface JobPaths {
   root: string;
   commandFile: string;
@@ -138,16 +96,6 @@ export type WatchEvent =
   | { kind: "result"; result: JobResultArtifact }
   | { kind: "failure"; error: string };
 
-export interface HerdrAgentLaunch {
-  paneId: string;
-  terminalId: string;
-}
-
-export interface HerdrAgentInspection {
-  kind: "present";
-  status: "idle" | "working" | "blocked" | "done" | "unknown";
-}
-
 export interface HerdrOperations {
   createPane(options: {
     name: string;
@@ -161,8 +109,4 @@ export interface HerdrOperations {
   readPane(paneId: string, lines: number): Promise<string>;
   interruptPane(paneId: string): Promise<void>;
   closePane(paneId: string): Promise<void>;
-  startAgent(options: { name: string; cwd: string; placement: AgentPlacement; env: Record<string, string>; argv: string[] }): Promise<HerdrAgentLaunch>;
-  inspectAgent(target: string): Promise<HerdrAgentInspection | { kind: "missing"; error?: string } | { kind: "unavailable"; error: string }>;
-  readAgent(target: string, lines: number): Promise<string>;
-  sendAgentText(target: string, text: string): Promise<void>;
 }

@@ -24,7 +24,7 @@ Important variables:
 - Use `--no-focus` when opening a job pane from an agent so the agent does not accidentally type into the new shell.
 - Use `--cwd "$PWD"` so the pane starts in the same project directory as the agent.
 - Rename panes immediately (`server`, `tests`, `logs`, `watch`) so the Herdr sidebar stays useful.
-- Use `herdr pane ...` for ordinary terminals and long-running jobs; use `herdr agent start ...` only for another coding agent.
+- Use `herdr pane ...` for ordinary terminals and long-running jobs; use `subagent` for coding delegation.
 - Use a separate Herdr workspace per repo/task. Use tabs for major views such as `agents`, `server`, `logs`, or `review` only when a single tab is getting crowded.
 - For isolated implementation work, prefer Herdr worktrees or another explicit worktree flow rather than multiple writers in one checkout.
 - Install/check the Pi integration (`herdr integration install pi`, `herdr integration status`) when managing Pi agents so Herdr gets better agent state/session signals.
@@ -57,33 +57,13 @@ herdr_job_start({
 
 `cleanup` controls the terminal pane: `"on_success"` (the default) closes a successful job and retains failures, `"always"` closes either outcome, and `"never"` retains either outcome. The deprecated `keepPane` alias remains supported for old calls (`true` maps to `"never"`; `false` maps to `"always"`), but cannot be combined with `cleanup`.
 
-After starting an async job, do **not** poll it with `bash`, `herdr wait`, sleeps, loops, or repeated reads. Use `herdr_job_read` for deliberate inspection of entries prefixed `job`, and `herdr_agent_read` for entries prefixed `agent`; completion and readiness are delivered automatically. Terminal steers include `paneDisposition` and `trackingDisposition` details: a pane marked `closed` was auto-closed and needs no further action; a `missing` pane with retained tracking can be forgotten using `herdr_job_close`. `herdr_jobs_list` mirrors the status widget, including retained failures and active managed agents. Retained terminal jobs remain available to `herdr_job_read` and `herdr_job_close`; closing an already-removed pane simply forgets its retained record.
+After starting an async job, do **not** poll it with `bash`, `herdr wait`, sleeps, loops, or repeated reads. Use `herdr_job_read` only for deliberate inspection; completion and readiness are delivered automatically. Terminal steers include `paneDisposition` and `trackingDisposition` details: a pane marked `closed` was auto-closed and needs no further action; a `missing` pane with retained tracking can be forgotten using `herdr_job_close`. `herdr_jobs_list` mirrors the status widget, including retained failures. Retained terminal jobs remain available to `herdr_job_read` and `herdr_job_close`; closing an already-removed pane simply forgets its retained record.
 
 Tracked job names are unique. Close a retained job before reusing its name.
 
-## Managed Pi agent jobs
+Use `subagent` for coding delegation. It supports recursive orchestration, explicit extension loading, tool restrictions, and deferred completion for parents that must process descendant results.
 
-Use `subagent` for normal coding delegation that should inherit the shared Pi configuration and subagent lifecycle. Use `herdr_agent_start` when a Pi agent needs a visible long-running TTY, caller-selected active tools, experimental/project extensions, or needs to orchestrate its own subagents.
-
-```ts
-herdr_agent_start({
-  name: "migration orchestrator",
-  task: "Coordinate workers, validate the migration, then report the result.",
-  cwd: "/path/to/project",
-  tools: "read,bash,subagent,dev_migration_tool",
-  extensionMode: "normal"
-})
-```
-
-Managed agents start in a dedicated Herdr **tab** by default. Set `placement: "right"` or `placement: "down"` only when a side-by-side split is intentional.
-
-`extensionMode: "normal"` retains ordinary global/project extension discovery, including project `.pi` extensions. `extensionMode: "explicit"` starts Pi with `--no-extensions` and loads only the comma-separated paths given through `extensions`, plus the private completion bridge. In either mode, `tools` is a strict active-tool allowlist when supplied.
-
-A managed agent is deliberately **not** auto-completed when Herdr reports it idle: a root orchestrator may be waiting for asynchronous descendant results. The agent calls `herdr_agent_done` after it has processed those results. That writes the completion artifact, shuts down the child Pi process, and delivers the final summary to the caller automatically. Do not poll the managed agent from the parent.
-
-To message an agent started through Herdr, use `herdr_agent_send({ target, message })`. It appends Enter and submits the prompt. Do not use raw `herdr agent send` through `bash`; that CLI command sends literal text only and leaves it in the child editor until another input submits it. With `extensionMode: "explicit"`, include the Herdr jobs extension entrypoint in `extensions` when the child needs this messaging tool.
-
-The direct CLI workflow below remains appropriate when the extension is unavailable or when a genuinely short synchronous gate is required.
+The direct pane workflow below remains appropriate when the extension is unavailable or when a genuinely short synchronous gate is required.
 
 ## Open a tab for a long-running command
 
@@ -154,7 +134,7 @@ Close the pane when it is no longer useful:
 herdr pane close "$new_pane"
 ```
 
-## When to use panes vs agents
+## When to use panes
 
 Use `herdr pane ...` for:
 
@@ -164,11 +144,7 @@ Use `herdr pane ...` for:
 - REPLs and ordinary shells
 - low-level terminal control
 
-Use `herdr agent start ... -- <argv...>` only when starting another coding agent that should appear in `herdr agent list` and receive agent status tracking. Prefer `herdr_agent_start` from Pi when the parent needs tool isolation and automatic completion delivery; use direct CLI only for manual or external orchestration:
-
-```bash
-herdr agent start reviewer --cwd "$PWD" --split right -- pi
-```
+Use `subagent` instead when the work requires another coding agent.
 
 ## Useful commands
 
@@ -182,13 +158,4 @@ herdr pane resize --direction down --amount 0.05 --pane "$HERDR_PANE_ID"
 herdr pane zoom "$HERDR_PANE_ID" --toggle
 herdr pane rename <pane_id> "label"
 herdr pane close <pane_id>
-```
-
-For agent-aware panes:
-
-```bash
-herdr agent list
-herdr agent read <target> --lines 80
-herdr agent wait <target> --status idle --timeout 300000
-herdr agent explain <target> --json
 ```

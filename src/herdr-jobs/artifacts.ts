@@ -3,7 +3,7 @@ import { mkdir, open, readFile, readdir, rename, stat, writeFile } from "node:fs
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve, sep } from "node:path";
 import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize, truncateTail } from "@earendil-works/pi-coding-agent";
-import { JOB_METADATA_VERSION, JOB_RESULT_VERSION, type JobPaths, type JobResultArtifact, type ManagedAgentCompletion, type ManagedAgentMetadata, type ManagedAgentPaths, type PersistedJobMetadata } from "./types.ts";
+import { JOB_METADATA_VERSION, JOB_RESULT_VERSION, type JobPaths, type JobResultArtifact, type PersistedJobMetadata } from "./types.ts";
 
 const JOB_ID = /^[a-zA-Z0-9_-]{8,128}$/;
 
@@ -18,36 +18,6 @@ export function isJobId(value: string): boolean {
 export function getArtifactRoot(sessionDir: string | undefined, sessionId: string | undefined): string {
   if (sessionDir && sessionId) return join(sessionDir, "artifacts", sessionId, "herdr-jobs");
   return join(tmpdir(), "pi-herdr-jobs", String(process.pid));
-}
-
-export function getManagedAgentPaths(root: string, id: string): ManagedAgentPaths {
-  if (!isJobId(id)) throw new Error("Invalid managed agent id.");
-  const agentRoot = join(root, "managed-agents", id);
-  return {
-    root: agentRoot,
-    metadataFile: join(agentRoot, "metadata.json"),
-    completionFile: join(agentRoot, "completion.json"),
-    sessionFile: join(agentRoot, "session.jsonl"),
-  };
-}
-
-export function parseManagedAgentCompletion(value: unknown, expectedId: string): ManagedAgentCompletion | null {
-  const item = value as Partial<ManagedAgentCompletion> | null;
-  if (!item || item.version !== 1 || item.id !== expectedId || typeof item.completedAt !== "number") return null;
-  if (item.summary !== undefined && typeof item.summary !== "string") return null;
-  return item as ManagedAgentCompletion;
-}
-
-export function parseManagedAgentMetadata(value: unknown): ManagedAgentMetadata | null {
-  const item = value as Partial<ManagedAgentMetadata> | null;
-  if (!item || item.version !== 1 || typeof item.id !== "string" || !isJobId(item.id)) return null;
-  if (typeof item.name !== "string" || typeof item.task !== "string" || typeof item.cwd !== "string") return null;
-  if (typeof item.paneId !== "string" || typeof item.terminalId !== "string" || typeof item.sessionFile !== "string") return null;
-  if (item.extensionMode !== "normal" && item.extensionMode !== "explicit") return null;
-  if (!Array.isArray(item.extensions) || !item.extensions.every((value) => typeof value === "string")) return null;
-  if (item.tools !== undefined && (!Array.isArray(item.tools) || !item.tools.every((value) => typeof value === "string"))) return null;
-  if (typeof item.startedAt !== "number") return null;
-  return item as ManagedAgentMetadata;
 }
 
 export function getJobPaths(root: string, id: string): JobPaths {

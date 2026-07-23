@@ -15,7 +15,6 @@ function fakeJob() {
 test("jobs widget is mounted once instead of being re-registered on refresh", async () => {
   const runtime = getRuntime();
   runtime.jobs.clear();
-  runtime.managedAgents.clear();
   runtime.widgetMounted = false;
   runtime.widgetRequestRender = undefined;
   runtime.jobs.set("abcdefgh", fakeJob());
