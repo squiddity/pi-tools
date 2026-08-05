@@ -3,7 +3,7 @@ import { isAbsolute, resolve } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { StringEnum } from "@earendil-works/pi-ai";
 import { Box, Key, Text, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
-import { Type } from "typebox";
+import { Type, type Static } from "typebox";
 import { createJobId, ensureJobDirectory, getArtifactRoot, getJobPaths, listMetadata, readLogTail, readResult, writeAtomicJson } from "../../src/herdr-jobs/artifacts.ts";
 import { formatElapsed, formatFailureMessage, formatReadyMessage, formatReadyTimeoutMessage, formatResultMessage, jobSummary, type DeliveryDisposition } from "../../src/herdr-jobs/format.ts";
 import { ensureHerdrAvailable, herdr, shellReadyDelayMs } from "../../src/herdr-jobs/herdr.ts";
@@ -25,10 +25,25 @@ const START_SCHEMA = Type.Object({
   readyPattern: Type.Optional(Type.String({ description: "Substring or regular expression to detect in the durable output log." })),
   readyRegex: Type.Optional(Type.Boolean()),
   readyTimeoutMs: Type.Optional(Type.Integer({ minimum: 0 })),
-  cleanup: Type.Optional(StringEnum(["on_success", "always", "never"] as const)),
-  // Deprecated compatibility alias. true maps to never; false maps to always.
-  keepPane: Type.Optional(Type.Boolean()),
+  cleanup: Type.Optional(StringEnum(["on_success", "always", "never"] as const, { description: "When to close the job pane: on_success (default), always, or never." })),
 });
+
+type StartParams = Static<typeof START_SCHEMA>;
+
+/**
+ * Keep the old keepPane spelling working for resumed/hand-written calls without
+ * advertising it to new model calls. If both spellings arrive, the canonical
+ * cleanup field wins because it can express all three policies.
+ */
+function prepareStartArguments(input: unknown): StartParams {
+  if (!input || typeof input !== "object") return input as StartParams;
+  const args = input as Record<string, unknown>;
+  if (!Object.prototype.hasOwnProperty.call(args, "keepPane")) return args as StartParams;
+  const keepPane = args.keepPane;
+  if (typeof keepPane !== "boolean") return args as StartParams;
+  const { keepPane: _legacyKeepPane, ...rest } = args;
+  return (rest.cleanup === undefined ? { ...rest, cleanup: keepPane ? "never" : "always" } : rest) as StartParams;
+}
 
 function textResult(text: string, details: Record<string, unknown> = {}) {
   return { content: [{ type: "text" as const, text }], details };
@@ -38,11 +53,8 @@ function sleep(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
-function resolveCleanup(cleanup: CleanupPolicy | undefined, keepPane: boolean | undefined): CleanupPolicy {
-  if (cleanup !== undefined && keepPane !== undefined) throw new Error("Specify cleanup or keepPane, not both.");
-  if (cleanup) return cleanup;
-  if (keepPane !== undefined) return keepPane ? "never" : "always";
-  return "on_success";
+function resolveCleanup(cleanup: CleanupPolicy | undefined): CleanupPolicy {
+  return cleanup ?? "on_success";
 }
 
 function assertUniqueTrackedName(name: string): void {
@@ -345,10 +357,11 @@ export default function herdrJobsExtension(pi: ExtensionAPI) {
   pi.registerTool({
     name: "herdr_job_start",
     label: "herdr job start",
-    description: "Start an ordinary shell command in a dedicated herdr pane and return immediately. This is fire-and-forget: readiness and completion are delivered automatically. Do not poll it with bash, herdr wait, sleeps, or repeated reads.",
+    description: "Start an ordinary shell command in a dedicated herdr pane and return immediately. This is fire-and-forget: readiness and completion are delivered automatically. Do not poll it with bash, herdr wait, sleeps, or repeated reads. Use cleanup to choose pane retention; older keepPane calls are normalized for compatibility.",
     promptSnippet: "Start a non-blocking herdr job for a long-running test, build, server, or watcher; completion arrives automatically.",
-    promptGuidelines: ["Use herdr_job_start for ordinary long-running commands in herdr. After calling herdr_job_start, do not poll with bash, herdr wait, sleeps, or repeated reads; wait for its automatic steer notification."],
+    promptGuidelines: ["Use herdr_job_start for ordinary long-running commands in herdr. After calling herdr_job_start, do not poll with bash, herdr wait, sleeps, or repeated reads; wait for its automatic steer notification.", "Use herdr_job_start.cleanup for pane retention; do not add the deprecated keepPane field to new calls."],
     parameters: START_SCHEMA,
+    prepareArguments: prepareStartArguments,
     renderCall(_args, theme) {
       return new Text(theme.fg("toolTitle", theme.bold("herdr job start")), 0, 0);
     },
@@ -359,7 +372,7 @@ export default function herdrJobsExtension(pi: ExtensionAPI) {
       assertUniqueTrackedName(name);
       if (!command) throw new Error("herdr job command must not be empty.");
       if (params.readyTimeoutMs !== undefined && !params.readyPattern) throw new Error("readyTimeoutMs requires readyPattern.");
-      const cleanup = resolveCleanup(params.cleanup, params.keepPane);
+      const cleanup = resolveCleanup(params.cleanup);
       if (params.readyPattern && params.readyRegex) {
         try { new RegExp(params.readyPattern); } catch (error) { throw new Error(`Invalid readiness regular expression: ${error instanceof Error ? error.message : String(error)}`); }
       }

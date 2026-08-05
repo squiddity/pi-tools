@@ -136,7 +136,7 @@ Validation and semantics:
 - `readyPattern` is allowed for either kind, though it is primarily intended for services.
 - Compile a readiness regex before launch so invalid patterns fail synchronously without creating a pane.
 - If `readyTimeoutMs` expires, emit a readiness-timeout notification but do not automatically kill the underlying process.
-- `cleanup: "on_success"` closes a tab after successful completion and retains a failed tab for inspection. `"always"` closes either outcome after result/log extraction; `"never"` leaves either outcome open. Keep `keepPane` as a backwards-compatible alias (`true` → `"never"`, `false` → `"always"`) until a later major API revision; reject calls that specify both fields.
+- `cleanup: "on_success"` closes a tab after successful completion and retains a failed tab for inspection. `"always"` closes either outcome after result/log extraction; `"never"` leaves either outcome open. Keep `keepPane` as a backwards-compatible alias (`true` → `"never"`, `false` → `"always"`) until a later major API revision; when both fields arrive from a legacy or resumed call, `cleanup` takes precedence.
 - Return details containing at least `jobId`, `paneId`, `name`, `kind`, `cwd`, `artifactDir`, `logFile`, and `status: "started"`.
 - The tool description and prompt guidelines must explicitly say that it is fire-and-forget, completion will arrive automatically, and the model must not poll with `bash`, `herdr wait`, sleeps, or repeated reads.
 

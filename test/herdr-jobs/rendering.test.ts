@@ -41,8 +41,14 @@ test("result messages use a coloured box and hide log output until expanded", as
   assert.match(startCall, /herdr job start/);
   assert.doesNotMatch(startCall, /herdr_job_start/);
 
-  await assert.rejects(
-    tools.get("herdr_job_start").execute("call", { name: "tests", command: "echo test", cleanup: "always", keepPane: false }),
-    /cleanup or keepPane/,
+  const startTool = tools.get("herdr_job_start");
+  assert.equal(startTool.parameters.properties.keepPane, undefined);
+  assert.deepEqual(
+    startTool.prepareArguments({ name: "tests", command: "echo test", keepPane: true }),
+    { name: "tests", command: "echo test", cleanup: "never" },
+  );
+  assert.deepEqual(
+    startTool.prepareArguments({ name: "tests", command: "echo test", cleanup: "always", keepPane: false }),
+    { name: "tests", command: "echo test", cleanup: "always" },
   );
 });

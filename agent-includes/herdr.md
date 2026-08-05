@@ -5,6 +5,7 @@ This agent may be running inside [Herdr](https://herdr.dev), a terminal workspac
 High-level rules:
 
 - When the `herdr_job_*` tools are available, prefer `herdr_job_start` for ordinary long-running tests, builds, servers, watchers, and tails. It returns immediately; readiness and completion arrive automatically as steer messages.
+- Use `herdr_job_start.cleanup` for pane retention. Do not add deprecated `keepPane` to new calls; older calls are normalized automatically, and `cleanup` wins if both fields are present.
 - After `herdr_job_start`, do **not** poll with the parent `bash` tool, `herdr wait`, sleeps, repeated log reads, or loops. Use `herdr_job_read` only for an explicit inspection requested by the user or needed to diagnose a problem.
 - Use `subagent` for coding delegation, including recursive orchestration and isolated development-extension loading. Use `herdr_job_start` only for ordinary shell commands. If the async job extension is unavailable, direct pane commands and a genuinely short synchronous `herdr wait` remain valid fallbacks.
 - `herdr_jobs_list` reports ordinary shell jobs. Use `herdr_job_read` only for explicit inspection requested by the user or needed to diagnose a problem.

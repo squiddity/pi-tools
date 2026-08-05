@@ -55,7 +55,7 @@ herdr_job_start({
 })
 ```
 
-`cleanup` controls the terminal pane: `"on_success"` (the default) closes a successful job and retains failures, `"always"` closes either outcome, and `"never"` retains either outcome. The deprecated `keepPane` alias remains supported for old calls (`true` maps to `"never"`; `false` maps to `"always"`), but cannot be combined with `cleanup`.
+`cleanup` controls the terminal pane: `"on_success"` (the default) closes a successful job and retains failures, `"always"` closes either outcome, and `"never"` retains either outcome. New calls should use `cleanup`; the deprecated `keepPane` alias remains supported for older calls (`true` maps to `"never"`; `false` maps to `"always"`). If both fields arrive from a legacy or resumed call, `cleanup` takes precedence.
 
 After starting an async job, do **not** poll it with `bash`, `herdr wait`, sleeps, loops, or repeated reads. Use `herdr_job_read` only for deliberate inspection; completion and readiness are delivered automatically. Terminal steers include `paneDisposition` and `trackingDisposition` details: a pane marked `closed` was auto-closed and needs no further action; a `missing` pane with retained tracking can be forgotten using `herdr_job_close`. `herdr_jobs_list` mirrors the status widget, including retained failures. Retained terminal jobs remain available to `herdr_job_read` and `herdr_job_close`; closing an already-removed pane simply forgets its retained record.
 
