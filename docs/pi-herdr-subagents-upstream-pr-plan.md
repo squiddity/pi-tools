@@ -6,6 +6,10 @@ This document is a handoff for a fresh session. It captures how to split the cur
 
 Do **not** send upstream PRs merely because this document exists. The immediate next phase is reconstruction and internal review in the fork.
 
+## Current internal review status
+
+PRs 1–5 are complete draft PRs in the `squiddity` fork, stacked in order. PR6 — waiting timeout notifications and one-shot snooze — is next. No upstream PRs have been opened.
+
 ## Repository and baseline
 
 Local repository:
