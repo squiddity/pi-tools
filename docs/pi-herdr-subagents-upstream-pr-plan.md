@@ -8,7 +8,7 @@ Do **not** send upstream PRs merely because this document exists. The immediate 
 
 ## Current internal review status
 
-PRs 1–5 are complete draft PRs in the `squiddity` fork, stacked in order. PR6 — waiting timeout notifications and one-shot snooze — is next. No upstream PRs have been opened.
+PRs 1–6 are complete draft PRs in the `squiddity` fork, stacked in order. PR6 — waiting timeout notifications and one-shot snooze — is implemented on `review/06-waiting-timeouts` at commit `6358981`. PR7 — telemetry — remains deferred pending design review. No upstream PRs have been opened.
 
 ## Repository and baseline
 
@@ -578,7 +578,7 @@ Each reconstructed PR must establish its own green baseline. Do not rely on the 
 3. Fetch `upstream` and verify the new merge base.
 4. Confirm whether telemetry is still deferred.
 5. Create `review/upstream-base` from `upstream/main`.
-6. Reconstruct PR 1 only.
-7. Run focused and full validation.
-8. Push PR 1 to the fork and open an internal PR.
+6. Review the completed PR6 branch and its stacked diff (`review/06-waiting-timeouts`).
+7. Run focused and full validation for any review fixes.
+8. Keep PR7 telemetry deferred until its design review is complete.
 9. Do not begin upstream submission until the internal stack and compatibility notes are reviewed.
