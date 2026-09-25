@@ -8,7 +8,22 @@ Do **not** send upstream PRs merely because this document exists. The immediate 
 
 ## Current internal review status
 
-PRs 1–6 are complete draft PRs in the `squiddity` fork, stacked in order. PR6 — waiting timeout notifications and one-shot snooze — is implemented on `review/06-waiting-timeouts` at commit `6358981`. PR7 — telemetry — remains deferred pending design review. No upstream PRs have been opened.
+PRs 1–7 are pushed as one-commit review branches to the `squiddity` fork and are stacked on the updated `review/upstream-base` (`9a45fb9`, upstream v0.1.6). PR6 is at `67efebb` with draft PR #6. PR7 combines bounded tool-policy and usage telemetry at `038f482` on `origin/review/07-telemetry` with draft PR #7. No upstream PRs have been opened.
+
+Exact reviewed stack state:
+
+| Increment | Branch | Incremental commit range |
+|---|---|---|
+| Base | `review/upstream-base` | `9a45fb9` |
+| PR1 | `review/01-agent-policy` | `9a45fb9..0de3b2c` |
+| PR2 | `review/02-explicit-extensions` | `0de3b2c..784e616` |
+| PR3 | `review/03-recursive-lifecycle` | `784e616..b383c1c` |
+| PR4 | `review/04-resume-profiles` | `b383c1c..19494a3` |
+| PR5 | `review/05-manual-completion` | `19494a3..e3fe4d0` |
+| PR6 | `review/06-waiting-timeouts` (draft PR #6) | `e3fe4d0..67efebb` |
+| PR7 | `review/07-telemetry` (draft PR #7) | `67efebb..038f482` |
+
+The external checkout's local-only `integration/review-stack` pointer is at the current PR7 tip `038f482`.
 
 ## Repository and baseline
 
@@ -25,20 +40,24 @@ origin   https://github.com/squiddity/pi-herdr-subagents.git
 upstream https://github.com/0xRichardH/pi-herdr-subagents.git
 ```
 
-Current branch state when this document was written:
+Reference and review tips when this document was updated:
 
 ```text
-main                         d654eae
-feat/explicit-extension-mode ea7e784
+upstream/main                    9a45fb9
+review/upstream-base             9a45fb9
+review/06-waiting-timeouts       67efebb
+review/07-telemetry              038f482
+integration/review-stack         038f482 (local terminal pointer)
+feat/explicit-extension-mode     ea7e784
 ```
 
-The feature branch is 17 commits ahead of `main`. Its final diff is large:
+The reference feature branch was built as 17 commits over the former upstream base, with exact range `d654eae..ea7e784`. After upstream advanced to `9a45fb9`, treat it as a historical semantic reference rather than a branch directly ahead of current `upstream/main`. Its final diff is large:
 
 ```text
 20 files changed, 4,783 insertions, 175 deletions
 ```
 
-The current feature branch is a **reference implementation**, not suitable as one upstream PR. Its history contains cross-cutting commits, fixups, a reverted commit, and one especially large commit that combines manual completion, waiting notifications, planner behavior, tests, and documentation.
+The feature branch is a **reference implementation**, not suitable as one upstream PR. Its history contains cross-cutting commits, fixups, a reverted commit, and one especially large commit that combines manual completion, waiting notifications, planner behavior, tests, and documentation. The review branches are reconstructions, not cherry-picks, so `git cherry` reports all 17 reference commits as unique even where PR1–6 already reproduce their behavior. Compare behavior and focused diffs; do not use patch identity as a coverage test.
 
 ## Final design decisions already made
 
@@ -91,6 +110,19 @@ Useful reference commits include:
 | `ea7e784` | Unsigned, required resume profiles | Final profile policy; supersedes attestation portions |
 
 Do not simply cherry-pick `a1d9512` or `50fecbd`. Reconstruct each PR from the final tree and use the old commits only to locate relevant code and tests.
+
+### Reference branch versus reconstructed PR1–6
+
+The following distinction is important for the next phase:
+
+- `feat/explicit-extension-mode` contains all 17 original commits, including both telemetry families, the now-removed profile attestation design, the broad `50fecbd` implementation, and its later fixes.
+- `review/01-agent-policy` through `review/06-waiting-timeouts` contain clean, independently reconstructed versions of the named-agent policy, explicit extension runtime, recursive lifecycle, unsigned required resume profiles, safe completion, and waiting timeout/snooze behavior. They intentionally contain **no** active-tool or usage telemetry.
+- The semantics of `37a5e54` (independent resumed-session completion watcher) are already represented in the review stack even though the reference helper `prepareSubagentWatcher` is not copied verbatim.
+- The final policy of `ea7e784` (bounded, unsigned, required profiles; no attestation or profile-less tracked fallback) is already represented by PR4 and extended by PR6's waiting fields. Do not create another branch merely to replay `ea7e784`.
+- The reference-only telemetry is not represented: active-tool/deny evidence originates in selected portions of `a1d9512`, with child-policy result exposure in `465de36`; usage accounting is the contiguous reference range `5bce605..bca9903` (`7aeb8aa` and `bca9903`).
+- PR4 now includes the reference branch's standalone Pi session seeding: the deterministic session path is initialized with a parentless header before child process launch, alongside the required resume profile.
+- PR7 adds the bounded regular-file handling needed for its larger telemetry activity sidecar without introducing a separate security architecture.
+- Other visible tree differences are mostly reconstruction, documentation, formatting, test organization (`interrupt-control.test.ts` versus `interrupt-stress.test.ts`), or superseded attestation code. They are not automatically missing features.
 
 ## Recommended PR stack
 
@@ -234,6 +266,8 @@ A resumed tracked subagent uses the same runtime policy as its initial Pi-backed
 - Canonicalize the session path before profile-controlled cwd changes.
 - Refuse missing or malformed profiles before pane creation.
 - Preserve independent watcher lifetime for resumed sessions.
+- Seed every initial Pi-backed standalone session at its deterministic path with a parentless session header before child process launch.
+- Keep lineage-only and fork session seeding behavior unchanged.
 - Document direct `pi --session` for external sessions.
 - Focused profile and resume tests.
 
@@ -260,7 +294,8 @@ The final desired state **does** include the timeout fields; avoiding dormant fi
 
 #### Acceptance criteria
 
-- Every new Pi-backed tracked child gets a profile.
+- Every new Pi-backed tracked child gets a profile and an initialized deterministic session file.
+- Standalone session headers contain the child cwd and no `parentSession`; lineage-only and fork modes retain their existing linkage behavior.
 - A valid profile reproduces its runtime arguments and policy environment.
 - Missing/malformed/symlinked/special/oversized profiles fail before pane creation.
 - No prompt, system prompt, credential, grant, or conversation content appears in the profile.
@@ -354,22 +389,54 @@ Interactive children can notify their parent when a turn is ready without being 
 
 ---
 
-### PR 7 — Telemetry, deferred pending design review
+### PR 7 — Bounded tool-policy and usage telemetry
 
-Do not prepare this PR until telemetry requirements are settled.
+Branch and range:
 
-Potentially split it into two PRs:
+```text
+review/06-waiting-timeouts (67efebb)
+└── review/07-telemetry (038f482)
+    incremental range: 67efebb..038f482
+```
 
-1. **Active tool-policy evidence** — expected/actual tools, deny drift, mismatch reporting.
-2. **Usage accounting** — cumulative sessions, turns, responses, tokens, cost, and per-model buckets.
+Draft fork PR: <https://github.com/squiddity/pi-herdr-subagents/pull/7>
 
-These solve different problems and have different privacy, compatibility, and API concerns. They should not be bundled only because both currently use activity snapshots.
+#### User-visible promise
 
-Likely source references:
+Pi-backed child completions expose bounded observational tool-policy evidence and content-free provider usage accounting.
 
-- `7aeb8aa`
-- `bca9903`
-- Telemetry portions of `a1d9512`, `50fecbd`, `activity.ts`, and `launch-profile.ts`
+#### Include
+
+- Capture active tools after startup and compare them, plus effective deny names, with the preserved launch profile.
+- Report `toolProfile` as `exact`, `mismatch`, `unrestricted`, or `unverified`, including deny drift and active-denied evidence.
+- Record tracked-run sessions, turns, assistant responses, provider-reported token categories, and provider-reported costs.
+- Include structured `runningChildId` and session-file `sessionId` identifiers on initial and resumed completions, plus the reference host-identity presentation line.
+- Include `launchProfilePath` and `allowedChildAgents` on initial completions, and `launchProfilePath` with `profileStatus: "preserved"` on resumed completions.
+- Add at most 64 provider/model usage buckets; unavailable metrics remain `null` and are never estimated.
+- Preserve cumulative totals when the same tracked activity sidecar is reopened, including child extension reload; a separate `subagent_resume` launch starts a new activity sidecar.
+- Refresh the activity sidecar synchronously before completion details are built.
+- Bound and validate activity sidecars and prove message content is not persisted.
+
+#### Exclude
+
+- Signatures, HMAC, attestation, provenance, or sandboxing.
+- Correlation fields beyond the bounded reference completion identity and profile-policy fields.
+- Billing claims, dashboards, budgets, quotas, or cross-child aggregation.
+- Prompt, response, reasoning, credential, grant, or permission content.
+- Unrelated reference-branch refactors.
+
+#### Validation
+
+- Focused telemetry tests: 18 passing.
+- Full suite: 236 passing.
+- Integration suite: 16 passing.
+- Lint: clean.
+- Waiting-timeout stress suite: 10 passing.
+- `git diff --check`: clean.
+
+### Residual reconciliation after PR7
+
+Standalone session seeding is already owned by PR4. Run a final semantic comparison against `review/06-waiting-timeouts..feat/explicit-extension-mode` and classify remaining hunks as represented behavior, superseded attestation, test/docs organization, or intentional divergence.
 
 ## Dependency graph
 
@@ -385,10 +452,10 @@ PR 3  Recursive descendant lifecycle
   └── PR 5  Safe parent-driven completion
        └── PR 6  Waiting timeout and snooze
 
-PR 7  Telemetry — deferred
+PR 7  Bounded tool-policy and usage telemetry
 ```
 
-PRs 1–3 can be developed and reviewed with minimal coupling. PRs 4–6 are naturally stacked.
+PRs 1–3 were developed with minimal coupling. PRs 4–7 are naturally stacked.
 
 ## Internal fork review workflow
 
@@ -402,8 +469,9 @@ upstream/main
     └── review/02-explicit-extensions
         └── review/03-recursive-lifecycle
             └── review/04-resume-profiles
-                └── review/05-safe-completion
+                └── review/05-manual-completion
                     └── review/06-waiting-timeouts
+                        └── review/07-telemetry
 ```
 
 Push these branches to `origin` and open PRs in the `squiddity` fork with stacked bases:
@@ -414,8 +482,9 @@ Push these branches to `origin` and open PRs in the `squiddity` fork with stacke
 | `review/02-explicit-extensions` | `review/01-agent-policy` |
 | `review/03-recursive-lifecycle` | `review/02-explicit-extensions` |
 | `review/04-resume-profiles` | `review/03-recursive-lifecycle` |
-| `review/05-safe-completion` | `review/04-resume-profiles` |
-| `review/06-waiting-timeouts` | `review/05-safe-completion` |
+| `review/05-manual-completion` | `review/04-resume-profiles` |
+| `review/06-waiting-timeouts` | `review/05-manual-completion` |
+| `review/07-telemetry` | `review/06-waiting-timeouts` |
 
 A safer alternative to resetting fork `main` is to create an explicit base branch:
 
@@ -436,7 +505,7 @@ For each PR:
 2. Inspect the final feature branch for the desired behavior.
 3. Use old commits only as navigation aids.
 4. Reimplement or selectively apply the final relevant hunks.
-5. Exclude later-feature fields and telemetry.
+5. For PR1–6, exclude later-feature fields and telemetry; for PR7, include only the telemetry declared by its increment.
 6. Add focused tests and docs in the same PR.
 7. Run the narrow test first, then the complete project test/lint commands.
 8. Keep the branch green before starting the next one.
@@ -451,6 +520,10 @@ git range-diff upstream/main...review/<previous> upstream/main...review/<current
 
 Avoid broad `git cherry-pick` for the profile and manual-completion commits. They contain superseded or cross-cutting code.
 
+### Validation gates for PR7
+
+PR7 must cover active-tool timing, tool/deny comparison states, usage and cost accounting, null metrics, tracked-sidecar continuation, final refresh, bounded/unsafe files, and content non-persistence. Run `npm test`, `npm run lint`, `npm run test:stress`, and `git diff --check`; inspect the incremental diff to ensure deferred attestation, identity, and aggregation work did not leak in.
+
 ### Internal PR review checklist
 
 Every internal PR should answer:
@@ -464,6 +537,36 @@ Every internal PR should answer:
 - Are reload, shutdown, resume, and recursive behavior tested where relevant?
 - Is the README wording proportional to the actual guarantee?
 - Does the PR pass independently against its declared base?
+
+## Terminal local integration-testing stack point
+
+After PR1–7 are reviewed, move the existing **local-only** integration pointer:
+
+```bash
+cd /home/squiddity/projects/pi-herdr-subagents
+git switch integration/review-stack
+git reset --hard <final-reviewed-tip>
+```
+
+Run this only from a clean checkout. `<final-reviewed-tip>` is `review/07-telemetry`.
+
+The complete tested range is:
+
+```text
+review/upstream-base..integration/review-stack
+# currently anchored at upstream v0.1.6 (9a45fb9) on the base side
+```
+
+Rules for this branch:
+
+- It contains no integration-only product changes and no merge commits; it is a movable pointer to the exact reviewed linear stack.
+- Record the resolved tip SHA, base SHA, Node/npm versions, test commands, and results in the internal review notes.
+- Keep it local by default. Do not push it, name it `upstream-pr/*`, open a PR from it, or treat its existence as approval to submit upstream.
+- If integration testing finds a defect, fix it on the owning `review/*` branch, rebase descendants, and move/recreate the integration pointer. Never patch only the integration branch.
+- Test recursive spawn, explicit extension inheritance, descendant delivery/auto-exit, profile-preserving resume including PR4 standalone seeding, safe completion, timeout/snooze, both telemetry schemas, and reload/shutdown as one end-to-end stack.
+- Rebuild it from a refreshed upstream base before any later submission phase; that is a separate decision and validation event.
+
+This branch is the terminal artifact for the current local review phase. It deliberately does not imply immediate upstream submission.
 
 ## Moving approved work upstream
 
@@ -520,7 +623,7 @@ Benefits:
 7. Clearly label stacked PR dependencies and show only the incremental diff.
 8. Include migration/breaking behavior notes in PR 4, especially the required-profile resume change.
 9. Do not claim unsigned profiles establish provenance or tamper resistance.
-10. Keep telemetry out until its separate design review is complete.
+10. Keep PR7 upstream-ineligible until its internal review is complete; local integration testing does not constitute submission approval.
 
 ## Suggested PR template sections
 
@@ -557,28 +660,26 @@ If maintainers reject a long stack, collapse it into four thematic PRs:
 1. **Recursive execution policy** — unknown-agent failure, child-profile policy, explicit extensions.
 2. **Recursive lifecycle and policy-preserving resume** — descendants, deferred auto-exit, required unsigned profiles.
 3. **Safe completion and waiting notifications** — completion-aware interrupt, timeout, snooze, planner behavior.
-4. **Telemetry** — still deferred pending design review.
+4. **Telemetry** — bounded tool-policy and usage evidence from PR7.
 
-The seven-PR plan is preferred because it reduces review surface and allows upstream to accept useful subsets.
+The fine-grained plan is preferred because it reduces review surface and allows upstream to accept useful subsets. Standalone session seeding is part of PR4's resume-profile contract.
 
 ## Validation baseline
 
-At commit `ea7e784`, before reconstructing this stack:
+At reference commit `ea7e784`, before reconstruction began:
 
 - Full test suite: 234 passing.
 - Lint: zero warnings and zero errors.
 - Independent review of the unsigned profile/resume simplification found no concrete issues.
 
-Each reconstructed PR must establish its own green baseline. Do not rely on the final feature branch's test result as proof that an intermediate branch is correct.
+PR7's current review tip is `038f482`; its incremental range is `67efebb..038f482`. The stack tip passed 236 tests, lint, 10 waiting-timeout stress tests, and 16 Herdr integration tests. Treat validation as evidence only for these exact tips; do not rely on the reference branch's result as proof that a reconstructed branch is correct.
 
 ## Next-session starting checklist
 
 1. Read this document completely.
-2. Inspect current upstream history and open PRs before choosing names/APIs.
-3. Fetch `upstream` and verify the new merge base.
-4. Confirm whether telemetry is still deferred.
-5. Create `review/upstream-base` from `upstream/main`.
-6. Review the completed PR6 branch and its stacked diff (`review/06-waiting-timeouts`).
-7. Run focused and full validation for any review fixes.
-8. Keep PR7 telemetry deferred until its design review is complete.
-9. Do not begin upstream submission until the internal stack and compatibility notes are reviewed.
+2. Inspect current upstream history and open PRs before changing the pinned base or APIs.
+3. Confirm `review/upstream-base` and `upstream/main` remain aligned at `9a45fb9` after the approved v0.1.6 rebase.
+4. Reconfirm PR1–7 tips and review PR7's exact incremental diff `67efebb..038f482`.
+5. Perform the final semantic diff classification against `ea7e784`.
+6. Run local end-to-end integration testing from `integration/review-stack`.
+7. Do not create `upstream-pr/*`, push the integration pointer, or open upstream PRs until a later explicit submission decision.
