@@ -15,18 +15,19 @@ cp docs/pi-footer.example.json ~/.pi/agent/extensions/pi-footer.json
 
 The file contains no host paths, credentials, or other personal data. `pi-footer` also supports `/footer` for editing the configuration interactively.
 
-## Lemonade provider
+## Local model providers
 
-[`lemonade-provider/index.ts`](lemonade-provider/index.ts) registers locally served Lemonade models as the `lemonade` provider. It discovers models from the Ollama-compatible API and reads context lengths when available.
+No local model provider extension ships here. Locally served model servers fall into two families —
+OpenAI-compatible (`/v1/models`) and Ollama-compatible (`/api/tags`, `/api/show`; Lemonade is one of
+these) — and each new connection is generated from a skill rather than maintained as repo code:
 
-The extension contains no host-specific configuration. By default it connects to `http://127.0.0.1:13305/v1`; configure another host or API key with environment variables before starting Pi:
+- [`../skills/local-model-provider/SKILL.md`](../skills/local-model-provider/SKILL.md) — operational template, invoked as `/skill:local-model-provider`
+- [`../docs/local-model-providers.md`](../docs/local-model-providers.md) — rationale, rules, and verification recipe
 
-```sh
-export PI_LEMONADE_BASE_URL=http://your-lemonade-host:13305/v1
-export PI_LEMONADE_API_KEY=ollama
-```
-
-`LEMONADE_BASE_URL` and `LEMONADE_API_KEY` are also accepted for compatibility. The default API key is `ollama`, which is the usual local-server placeholder rather than a credential.
+The pattern keeps an optional local server from breaking Pi startup: synchronous registration, bounded
+discovery with timeouts, `refreshModels`, a fallback catalog, env-var configuration, IPv4/IPv6
+pitfalls, and verified thinking-level metadata. The former `lemonade-provider` extension was removed for
+this reason: its async factory awaited discovery before registering, so a stopped server failed Pi startup.
 
 ## Herdr jobs
 
